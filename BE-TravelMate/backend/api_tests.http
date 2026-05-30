@@ -1,0 +1,116 @@
+### API Test Suite - TravelMate Backend
+
+@baseUrl = http://localhost:5000/api
+@email = tester@example.com
+@password = password123
+
+### 1. Register User
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Tester User",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 2. Login User
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Save Token from Login Response
+@authToken = {{login.response.body.data.token}}
+
+### 3. Get User Profile
+GET {{baseUrl}}/auth/profile
+Authorization: Bearer {{authToken}}
+
+### 4. Create Trip (With AI Itinerary)
+# @name createTrip
+POST {{baseUrl}}/trips
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "destination": "Đà Nẵng",
+  "startDate": "2026-06-01",
+  "endDate": "2026-06-03",
+  "budget": 5000000,
+  "generateAiItinerary": true,
+  "people": 2,
+  "travelStyle": "Trải nghiệm",
+  "interests": "Bãi biển, ẩm thực",
+  "hotelArea": "Gần bãi biển Mỹ Khê"
+}
+
+### Save Trip ID from Create Trip Response
+@tripId = {{createTrip.response.body.data._id}}
+
+### 5. Get All Trips
+GET {{baseUrl}}/trips
+Authorization: Bearer {{authToken}}
+
+### 6. Get Trip By ID (With Budget & AI suggestions)
+GET {{baseUrl}}/trips/{{tripId}}
+Authorization: Bearer {{authToken}}
+
+### 7. Update Trip (e.g. Budget or Activities)
+PUT {{baseUrl}}/trips/{{tripId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "budget": 6000000,
+  "activities": [
+    {
+      "day": 1,
+      "time": "08:00 AM",
+      "location": "Bán đảo Sơn Trà",
+      "description": "Tham quan Chùa Linh Ứng và ngắm cảnh biển từ trên cao",
+      "cost": 100000,
+      "category": "PLACE",
+      "transport": "GRAB",
+      "durationMinutes": 180
+    },
+    {
+      "day": 1,
+      "time": "12:30 PM",
+      "location": "Quán Mì Quảng ngon Bà Mua",
+      "description": "Ăn trưa mì Quảng ếch đặc sản Đà Nẵng",
+      "cost": 120000,
+      "category": "FOOD",
+      "transport": "WALKING",
+      "durationMinutes": 60
+    }
+  ]
+}
+
+### 7.1 Share Trip
+# @name shareTrip
+POST {{baseUrl}}/trips/{{tripId}}/share
+Authorization: Bearer {{authToken}}
+
+### Save Share Code from Response
+@shareCode = {{shareTrip.response.body.data.shareCode}}
+
+### 7.2 Get Shared Trip (Public - No Token Required!)
+GET {{baseUrl}}/trips/shared/{{shareCode}}
+
+### 8. Delete Trip
+# DELETE {{baseUrl}}/trips/{{tripId}}
+# Authorization: Bearer {{authToken}}
+
+### 9. Map - Geocode Address
+GET {{baseUrl}}/map/geocode?address=Da+Nang
+Authorization: Bearer {{authToken}}
+
+### 10. Map - Calculate Distance
+GET {{baseUrl}}/map/distance?originLat=16.0544&originLng=108.2022&destLat=16.0748&destLng=108.2243
+Authorization: Bearer {{authToken}}

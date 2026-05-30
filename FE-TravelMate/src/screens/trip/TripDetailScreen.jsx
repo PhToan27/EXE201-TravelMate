@@ -1,0 +1,337 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Share,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Header from '../../components/common/Header';
+import Loading from '../../components/common/Loading';
+import TripTimeline from '../../components/trip/TripTimeline';
+import HotelCard from '../../components/hotel/HotelCard';
+import RestaurantCard from '../../components/restaurant/RestaurantCard';
+import useTrip from '../../hooks/useTrip';
+import { COLORS, SPACING, RADIUS } from '../../utils/constants';
+import { formatDateRange, getDayCount } from '../../utils/dateUtils';
+import { formatVND } from '../../utils/currencyUtils';
+
+const TABS = ['Lịch trình', 'Khách sạn', 'Nhà hàng', 'Ngân sách'];
+
+const TripDetailScreen = ({ route, navigation }) => {
+  const insets = useSafeAreaInsets();
+  const { tripId } = route.params;
+  const { currentTrip: trip, isLoading, fetchTripById, shareTrip, deleteTrip } = useTrip();
+  const [activeTab, setActiveTab] = useState(0);
+
+  useEffect(() => {
+    fetchTripById(tripId);
+  }, [tripId]);
+
+  const handleShare = async () => {
+    const result = await shareTrip(tripId);
+    if (result.success) {
+      await Share.share({
+        message: `Xem lịch trình chuyến đi của tôi trên TravelMate! Mã chia sẻ: ${result.data.shareCode}`,
+        title: 'Chia sẻ chuyến đi',
+      });
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert('Xóa chuyến đi', 'Bạn có chắc muốn xóa chuyến đi này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: async () => {
+          const result = await deleteTrip(tripId);
+          if (result.success) navigation.goBack();
+        },
+      },
+    ]);
+  };
+
+  if (isLoading || !trip) return <Loading message="Đang tải chuyến đi..." />;
+
+  const dayCount = getDayCount(trip.startDate, trip.endDate);
+
+  return (
+    <View style={styles.container}>
+      {/* Gradient hero header */}
+      <LinearGradient
+        colors={['#F97316', '#EA6C0A']}
+        style={[styles.heroHeader, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.heroTop}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={styles.heroActions}>
+            <TouchableOpacity onPress={() => navigation.navigate('EditTrip', { tripId })} style={styles.heroAction}>
+              <Ionicons name="pencil-outline" size={20} color={COLORS.white} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleShare} style={styles.heroAction}>
+              <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDelete} style={styles.heroAction}>
+              <Ionicons name="trash-outline" size={20} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.heroContent}>
+          <View style={styles.destRow}>
+            <Ionicons name="location" size={22} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.destination}>{trip.destination}</Text>
+          </View>
+          <View style={styles.metaRow}>
+            <MetaChip icon="calendar-outline" label={formatDateRange(trip.startDate, trip.endDate)} />
+            <MetaChip icon="sunny-outline" label={`${dayCount} ngày`} />
+            <MetaChip icon="people-outline" label={`${trip.totalPeople || 1} người`} />
+          </View>
+          <View style={styles.budgetRow}>
+            <Text style={styles.budgetLabel}>Ngân sách</Text>
+            <Text style={styles.budgetValue}>{formatVND(trip.budget)}</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* Tabs */}
+      <View style={styles.tabBar}>
+        {TABS.map((tab, idx) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tab, activeTab === idx && styles.tabActive]}
+            onPress={() => setActiveTab(idx)}
+          >
+            <Text style={[styles.tabText, activeTab === idx && styles.tabTextActive]}>
+              {tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Content */}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + SPACING.lg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {activeTab === 0 && <TripTimeline trip={trip} />}
+
+        {activeTab === 1 && (
+          <View style={styles.tabContent}>
+            {trip.hotelRecommendation ? (
+              <HotelCard hotel={trip.hotelRecommendation} />
+            ) : (
+              <Text style={styles.noData}>Chưa có gợi ý khách sạn</Text>
+            )}
+          </View>
+        )}
+
+        {activeTab === 2 && (
+          <View style={styles.tabContent}>
+            {trip.restaurantRecommendations?.length > 0 ? (
+              trip.restaurantRecommendations.map((r, i) => (
+                <RestaurantCard key={i} restaurant={r} />
+              ))
+            ) : (
+              <Text style={styles.noData}>Chưa có gợi ý nhà hàng</Text>
+            )}
+          </View>
+        )}
+
+        {activeTab === 3 && (
+          <View style={styles.tabContent}>
+            <BudgetSummary trip={trip} />
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+
+const MetaChip = ({ icon, label }) => (
+  <View style={metaStyles.chip}>
+    <Ionicons name={icon} size={13} color="rgba(255,255,255,0.85)" />
+    <Text style={metaStyles.label}>{label}</Text>
+  </View>
+);
+
+const metaStyles = StyleSheet.create({
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  label: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+});
+
+const BudgetSummary = ({ trip }) => {
+  const stats = trip.budgetStats;
+  const breakdown = trip.budgetBreakdown;
+
+  return (
+    <View>
+      {stats && (
+        <View style={bStyles.card}>
+          <Text style={bStyles.title}>Tổng quan</Text>
+          <BudgetRow label="Ngân sách" value={formatVND(trip.budget)} />
+          <BudgetRow label="Đã chi" value={formatVND(stats.totalExpenses)} highlight />
+          <BudgetRow
+            label="Còn lại"
+            value={formatVND(stats.remainingBudget)}
+            color={stats.remainingBudget < 0 ? COLORS.error : COLORS.success}
+          />
+        </View>
+      )}
+      {breakdown && (
+        <View style={bStyles.card}>
+          <Text style={bStyles.title}>Phân bổ AI</Text>
+          <BudgetRow label="Lưu trú" value={formatVND(breakdown.accommodation)} />
+          <BudgetRow label="Ăn uống" value={formatVND(breakdown.foodAndBeverage)} />
+          <BudgetRow label="Tham quan" value={formatVND(breakdown.activitiesAndEntranceFees)} />
+          <BudgetRow label="Di chuyển" value={formatVND(breakdown.transportation)} />
+          <BudgetRow label="Dự phòng" value={formatVND(breakdown.unforeseenExpenses)} />
+        </View>
+      )}
+    </View>
+  );
+};
+
+const BudgetRow = ({ label, value, highlight, color }) => (
+  <View style={bStyles.row}>
+    <Text style={bStyles.label}>{label}</Text>
+    <Text style={[bStyles.value, highlight && { color: COLORS.primary }, color && { color }]}>
+      {value}
+    </Text>
+  </View>
+);
+
+const bStyles = StyleSheet.create({
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  title: { fontSize: 16, fontWeight: '700', color: COLORS.black, marginBottom: SPACING.sm },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  label: { fontSize: 14, color: COLORS.gray[600] },
+  value: { fontSize: 14, fontWeight: '700', color: COLORS.black },
+});
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  heroHeader: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.lg,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+  },
+  heroActions: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  heroAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroContent: {
+    gap: SPACING.sm,
+  },
+  destRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  destination: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    flexWrap: 'wrap',
+  },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  budgetLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  budgetValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  tabActive: {
+    borderBottomWidth: 2.5,
+    borderBottomColor: COLORS.primary,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.gray[500],
+  },
+  tabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  content: {
+    padding: SPACING.md,
+  },
+  tabContent: {
+    gap: SPACING.sm,
+  },
+  noData: {
+    fontSize: 14,
+    color: COLORS.gray[400],
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: SPACING.xl,
+  },
+});
+
+export default TripDetailScreen;

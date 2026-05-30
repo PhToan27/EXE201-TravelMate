@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "TravelMate",
+    "slug": "travelmate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.travelmate.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F97316"
+      },
+      "package": "com.travelmate.app"
+    },
+    "web": {}
+  }
+}
