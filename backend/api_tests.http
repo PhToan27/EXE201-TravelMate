@@ -114,3 +114,8 @@ Authorization: Bearer {{authToken}}
 ### 10. Map - Calculate Distance
 GET {{baseUrl}}/map/distance?originLat=16.0544&originLng=108.2022&destLat=16.0748&destLng=108.2243
 Authorization: Bearer {{authToken}}
+
+### 11. Place - Get Place Details (New Feature)
+GET {{baseUrl}}/places/detail?name=Ngũ+Hành+Sơn
+Authorization: Bearer {{authToken}}
+

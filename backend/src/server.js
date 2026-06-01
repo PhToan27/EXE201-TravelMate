@@ -26,6 +26,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/trips', require('./routes/trip.routes'));
 app.use('/api/map', require('./routes/map.routes'));
+app.use('/api/places', require('./routes/place.routes'));
 
 // Basic testing route
 app.get('/health', (req, res) => {
