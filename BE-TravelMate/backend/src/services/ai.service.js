@@ -10,17 +10,19 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
  * @returns {Promise<Object>} The full AI response containing itinerary, hotel, and budget breakdown
  */
 const generateItinerary = async (destination, durationDays, budget, preferences = [], options = {}) => {
-  const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn('GEMINI_API_KEY is not defined. Falling back to mock itinerary.');
-    return generateMockItinerary(destination, durationDays, budget, preferences);
+    // console.warn('GEMINI_API_KEY is not defined. Falling back to mock itinerary.');
+    // return generateMockItinerary(destination, durationDays, budget, preferences);
+    throw new Error('GEMINI_API_KEY is not defined. Please add it to your .env file!');
   }
+
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-flash as the standard efficient model
+        // Use gemini-3.5-flash as the standard efficient model
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
       }
@@ -55,6 +57,14 @@ Yêu cầu chi tiết:
 7. Cung cấp bảng phân bổ ngân sách (budget breakdown) hợp lý cho toàn bộ chuyến đi bao gồm các hạng mục: accommodation (khách sạn), foodAndBeverage (ăn uống), activitiesAndEntranceFees (tham quan/vui chơi), transportation (di chuyển), và unforeseenExpenses (dự phòng). Tổng chi phí của các hạng mục này phải gần bằng ngân sách được cung cấp.
 8. Các gợi ý là thông tin tham khảo, không cần chứa liên kết đặt chỗ (booking link).
 9. Đảm bảo lịch trình thực tế, có thời gian nghỉ ngơi hợp lý, các điểm tham quan cùng ngày nằm trên các tuyến đường gần nhau để tránh mất nhiều thời gian di chuyển.
+10. QUAN TRỌNG VỀ RÀNG BUỘC NGÂN SÁCH (BUDGET CONSTRAINTS):
+    - Tổng chi phí của tất cả các hoạt động trong lịch trình (itinerary[].activities[].cost) cộng với tổng chi phí khách sạn (hotelRecommendation.estimatedCostPerNight * ${durationDays}) tuyệt đối KHÔNG ĐƯỢC vượt quá ngân sách được cung cấp (budget).
+    - Phải đảm bảo tính thực tế: ví dụ nếu ngân sách là 1.000.000 VND cho 2 ngày 2 người, hãy thiết kế các hoạt động và khách sạn bình dân, tiết kiệm để tổng chi phí thực tế không vượt quá 1.000.000 VND.
+    - Phải đảm bảo tính đồng bộ giữa bảng phân bổ ngân sách (budgetBreakdown) và các hoạt động thực tế trong lịch trình:
+      * Tổng chi phí khách sạn (estimatedCostPerNight * ${durationDays}) phải bằng budgetBreakdown.accommodation.
+      * Tổng chi phí của tất cả hoạt động ăn uống (category: 'FOOD') phải gần bằng budgetBreakdown.foodAndBeverage.
+      * Tổng chi phí của tất cả hoạt động di chuyển (category: 'TRANSPORT') phải gần bằng budgetBreakdown.transportation.
+      * Tổng chi phí của tất cả hoạt động tham quan/vui chơi (PLACE, REST, SHOPPING, OTHER) phải gần bằng budgetBreakdown.activitiesAndEntranceFees.
 
 Cấu trúc JSON đầu ra bắt buộc:
 {
@@ -101,7 +111,7 @@ Cấu trúc JSON đầu ra bắt buộc:
           "description": "Mô tả chi tiết hoạt động tại đây",
           "cost": chi_phí_ước_tính_hoạt_động_này_bằng_số,
           "category": "Chọn một trong: FOOD (nếu là đi ăn uống), PLACE (nếu tham quan, vui chơi), HOTEL (checkin/checkout/nghỉ tại khách sạn), TRANSPORT (di chuyển bằng xe/tàu/máy bay), REST (nghỉ ngơi thư giãn), SHOPPING (mua sắm), OTHER",
-          "transport": "Chọn một trong: WALKING, BIKE, CAR, BUS, TAXI, GRAB, OTHER để di chuyển tới điểm hoạt động này",
+          "transport": "Chọn một trong: WALKING, BIKE, MOTORBIKE, CAR, BUS, TAXI, GRAB, OTHER để di chuyển tới điểm hoạt động này",
           "durationMinutes": số_phút_diễn_ra_hoạt_động_bằng_số
         }
       ]
@@ -114,10 +124,12 @@ Cấu trúc JSON đầu ra bắt buộc:
     const responseText = result.response.text();
     const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanJson);
-  } catch (error) {
+    } catch (error) {
     console.error('Error generating itinerary with Gemini API:', error);
-    return generateMockItinerary(destination, durationDays, budget, preferences);
+    // return generateMockItinerary(destination, durationDays, budget, preferences);
+    throw error; // Quăng lỗi thực tế ra ngoài để hiển thị lên UI/Log
   }
+
 };
 
 /**

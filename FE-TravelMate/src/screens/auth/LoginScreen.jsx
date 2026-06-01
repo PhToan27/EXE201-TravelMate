@@ -7,13 +7,10 @@ import {
   TouchableOpacity,
   Alert,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
   Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomInput from '../../components/common/CustomInput';
 import CustomButton from '../../components/common/CustomButton';
@@ -49,36 +46,35 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: COLORS.white }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + SPACING.md, paddingBottom: insets.bottom + SPACING.xl }]}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + SPACING.sm, paddingBottom: insets.bottom + SPACING.xl },
+        ]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
       >
         {/* Back button */}
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.gray[700]} />
+          <Ionicons name="arrow-back" size={24} color={COLORS.gray[700]} />
         </TouchableOpacity>
 
-        {/* Plant/hero image */}
+        {/* Plant Illustration Header */}
         <View style={styles.heroWrap}>
-          <LinearGradient
-            colors={['#DCFCE7', '#BBF7D0', '#86EFAC']}
-            style={styles.heroGradient}
-          >
-            <Ionicons name="leaf" size={80} color="#16A34A" style={{ opacity: 0.8 }} />
-          </LinearGradient>
+          <Image
+            source={{ uri: 'https://images.unsplash.com/photo-1545241047-6083a3684587?q=80&w=400' }}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
         </View>
 
         {/* Heading */}
         <View style={styles.headingWrap}>
           <Text style={styles.heading}>Chào mừng trở lại</Text>
           <Text style={styles.subheading}>
-            Vui lòng đăng nhập để tiếp tục hành{'\n'}trình khám phá cùng TravelMate
+            Vui lòng đăng nhập để tiếp tục hành trình khám phá cùng TravelMate
           </Text>
         </View>
 
@@ -93,8 +89,15 @@ const LoginScreen = ({ navigation }) => {
             error={errors.email}
             leftIcon={<Ionicons name="mail-outline" size={18} color={COLORS.gray[400]} />}
           />
+
+          {/* Password Label Row with forgot link inline */}
+          <View style={styles.passwordLabelRow}>
+            <Text style={styles.passwordLabel}>Mật khẩu</Text>
+            <TouchableOpacity onPress={() => Alert.alert('Thông báo', 'Tính năng đang được phát triển!')}>
+              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+          </View>
           <CustomInput
-            label="Mật khẩu"
             value={password}
             onChangeText={(t) => { setPassword(t); setErrors((e) => ({ ...e, password: '' })); }}
             placeholder="••••••••"
@@ -102,13 +105,9 @@ const LoginScreen = ({ navigation }) => {
             error={errors.password}
             leftIcon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.gray[400]} />}
           />
-
-          <TouchableOpacity style={styles.forgotBtn}>
-            <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Login button */}
+        {/* Login Button */}
         <CustomButton
           title="Đăng nhập"
           onPress={handleLogin}
@@ -119,15 +118,13 @@ const LoginScreen = ({ navigation }) => {
         {/* Or divider */}
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>Hoặc đăng nhập nhận bằng</Text>
+          <Text style={styles.dividerText}>Hoặc đăng nhập nhanh bằng</Text>
           <View style={styles.dividerLine} />
         </View>
 
         {/* Google button */}
         <TouchableOpacity style={styles.googleBtn} activeOpacity={0.85}>
-          <View style={styles.googleIconWrap}>
-            <Text style={styles.googleG}>G</Text>
-          </View>
+          <Ionicons name="logo-google" size={18} color="#EA4335" />
           <Text style={styles.googleText}>Google</Text>
         </TouchableOpacity>
 
@@ -139,7 +136,7 @@ const LoginScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -151,40 +148,49 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     justifyContent: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   heroWrap: {
-    height: 180,
-    borderRadius: RADIUS.xl,
+    height: 160,
+    width: 160,
+    alignSelf: 'center',
+    borderRadius: RADIUS.full,
     overflow: 'hidden',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
-  heroGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
   headingWrap: {
-    marginBottom: SPACING.xl,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
   heading: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: COLORS.black,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subheading: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.gray[500],
-    lineHeight: 22,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   form: {
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
-  forgotBtn: {
-    alignSelf: 'flex-end',
-    marginTop: -8,
-    marginBottom: SPACING.md,
+  passwordLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  passwordLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.gray[700],
   },
   forgotText: {
     fontSize: 13,
@@ -192,7 +198,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   loginBtn: {
-    marginBottom: SPACING.lg,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   dividerRow: {
     flexDirection: 'row',
@@ -207,7 +214,7 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     fontSize: 12,
-    color: COLORS.gray[500],
+    color: COLORS.gray[400],
   },
   googleBtn: {
     flexDirection: 'row',
@@ -217,38 +224,26 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.gray[200],
     borderRadius: RADIUS.md,
-    paddingVertical: 14,
+    paddingVertical: 13,
     marginBottom: SPACING.lg,
-  },
-  googleIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#4285F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  googleG: {
-    color: COLORS.white,
-    fontWeight: '800',
-    fontSize: 13,
   },
   googleText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.gray[700],
   },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: SPACING.md,
   },
   registerLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.gray[500],
   },
   registerLink: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.primary,
     fontWeight: '700',
   },

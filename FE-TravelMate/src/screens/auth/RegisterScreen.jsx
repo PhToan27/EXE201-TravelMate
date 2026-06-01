@@ -9,10 +9,8 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomInput from '../../components/common/CustomInput';
 import CustomButton from '../../components/common/CustomButton';
@@ -61,21 +59,23 @@ const RegisterScreen = ({ navigation }) => {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + SPACING.md, paddingBottom: insets.bottom + SPACING.xl },
+          { paddingTop: insets.top + SPACING.sm, paddingBottom: insets.bottom + SPACING.xl },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Back */}
+        {/* Back Button */}
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.gray[700]} />
+          <Ionicons name="arrow-back" size={24} color={COLORS.gray[700]} />
         </TouchableOpacity>
 
         {/* Heading */}
-        <Text style={styles.heading}>Tham gia TravelMate</Text>
-        <Text style={styles.subheading}>
-          Bắt đầu hành trình khám phá thế giới cùng{'\n'}cộng đồng du lịch hàng đầu.
-        </Text>
+        <View style={styles.headerContainer}>
+          <Text style={styles.heading}>Tham gia TravelMate</Text>
+          <Text style={styles.subheading}>
+            Bắt đầu hành trình khám phá thế giới cùng cộng đồng du lịch hàng đầu.
+          </Text>
+        </View>
 
         {/* Form */}
         <View style={styles.form}>
@@ -86,7 +86,9 @@ const RegisterScreen = ({ navigation }) => {
             placeholder="Nhập họ và tên của bạn"
             autoCapitalize="words"
             error={errors.name}
+            leftIcon={<Ionicons name="person-outline" size={18} color={COLORS.gray[400]} />}
           />
+
           <CustomInput
             label="Email"
             value={email}
@@ -94,7 +96,9 @@ const RegisterScreen = ({ navigation }) => {
             placeholder="example@gmail.com"
             keyboardType="email-address"
             error={errors.email}
+            leftIcon={<Ionicons name="mail-outline" size={18} color={COLORS.gray[400]} />}
           />
+
           <CustomInput
             label="Mật khẩu"
             value={password}
@@ -102,7 +106,9 @@ const RegisterScreen = ({ navigation }) => {
             placeholder="Nhập mật khẩu"
             secureTextEntry
             error={errors.password}
+            leftIcon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.gray[400]} />}
           />
+
           <CustomInput
             label="Xác nhận mật khẩu"
             value={confirmPassword}
@@ -110,6 +116,7 @@ const RegisterScreen = ({ navigation }) => {
             placeholder="Nhập lại mật khẩu"
             secureTextEntry
             error={errors.confirmPassword}
+            leftIcon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.gray[400]} />}
           />
 
           {/* Terms checkbox */}
@@ -160,28 +167,31 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     justifyContent: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  headerContainer: {
+    marginBottom: SPACING.lg,
   },
   heading: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: COLORS.black,
     marginBottom: 8,
   },
   subheading: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.gray[500],
-    lineHeight: 22,
-    marginBottom: SPACING.xl,
+    lineHeight: 20,
   },
   form: {
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   termsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: SPACING.sm,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.xs,
+    paddingVertical: 4,
   },
   checkbox: {
     width: 20,
@@ -191,7 +201,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.gray[300],
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 1,
   },
   checkboxChecked: {
     backgroundColor: COLORS.primary,
@@ -201,16 +210,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.gray[600],
     flex: 1,
-    lineHeight: 20,
   },
   termsLink: {
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   termsError: {
     fontSize: 12,
     color: COLORS.error,
     marginTop: 4,
+    marginLeft: 2,
   },
   registerBtn: {
     marginBottom: SPACING.lg,
@@ -220,13 +229,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: SPACING.md,
   },
   loginLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.gray[500],
   },
   loginLink: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.primary,
     fontWeight: '700',
   },

@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import SavedTripsScreen from '../screens/trip/SavedTripsScreen';
@@ -15,6 +15,8 @@ import RestaurantSuggestionScreen from '../screens/restaurant/RestaurantSuggesti
 import BudgetBreakdownScreen from '../screens/budget/BudgetBreakdownScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
+import PlaceDetailScreen from '../screens/trip/PlaceDetailScreen';
+import RouteMapScreen from '../screens/trip/RouteMapScreen';
 
 import { COLORS, RADIUS } from '../utils/constants';
 
@@ -34,9 +36,49 @@ const RootStack = () => {
       <Stack.Screen name="RestaurantSuggestion" component={RestaurantSuggestionScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="BudgetBreakdown" component={BudgetBreakdownScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="RouteMap" component={RouteMapScreen} options={{ animation: 'slide_from_right' }} />
     </Stack.Navigator>
   );
 };
+
+const CommunityPlaceholder = () => (
+  <View style={placeholderStyles.container}>
+    <Ionicons name="globe-outline" size={64} color={COLORS.primary} />
+    <Text style={placeholderStyles.title}>Cộng đồng du lịch</Text>
+    <Text style={placeholderStyles.subtitle}>Tính năng Cộng đồng đang được phát triển. Hãy đón chờ nhé!</Text>
+  </View>
+);
+
+const ExpensesPlaceholder = () => (
+  <View style={placeholderStyles.container}>
+    <Ionicons name="cash-outline" size={64} color={COLORS.primary} />
+    <Text style={placeholderStyles.title}>Quản lý chi phí</Text>
+    <Text style={placeholderStyles.subtitle}>Tính năng quản lý chi phí tổng hợp đang được phát triển!</Text>
+  </View>
+);
+
+const placeholderStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    padding: 20,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.black,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    textAlign: 'center',
+  },
+});
 
 const TabNavigator = () => {
   return (
@@ -50,37 +92,20 @@ const TabNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           const icons = {
             Home: focused ? 'home' : 'home-outline',
-            SavedTrips: focused ? 'bookmark' : 'bookmark-outline',
-            CreateTripTab: 'add-circle',
-            Profile: focused ? 'person' : 'person-outline',
+            SavedTrips: focused ? 'briefcase' : 'briefcase-outline',
+            Community: focused ? 'globe' : 'globe-outline',
+            Expenses: focused ? 'cash' : 'cash-outline',
+            Profile: focused ? 'person-circle' : 'person-circle-outline',
           };
           const iconName = icons[route.name] || 'ellipse-outline';
-
-          if (route.name === 'CreateTripTab') {
-            return (
-              <View style={styles.createTabIcon}>
-                <Ionicons name="add" size={28} color={COLORS.white} />
-              </View>
-            );
-          }
-
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
       <Tab.Screen name="SavedTrips" component={SavedTripsScreen} options={{ tabBarLabel: 'Chuyến đi' }} />
-      <Tab.Screen
-        name="CreateTripTab"
-        component={CreateTripScreen}
-        options={{ tabBarLabel: '', tabBarStyle: { display: 'none' } }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('CreateTrip');
-          },
-        })}
-      />
+      <Tab.Screen name="Community" component={CommunityPlaceholder} options={{ tabBarLabel: 'Cộng đồng' }} />
+      <Tab.Screen name="Expenses" component={ExpensesPlaceholder} options={{ tabBarLabel: 'Chi phí' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
     </Tab.Navigator>
   );
@@ -91,8 +116,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.gray[100],
-    height: 60,
-    paddingBottom: 8,
+    height: Platform.OS === 'ios' ? 88 : 68,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
     paddingTop: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
@@ -101,22 +126,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  createTabIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -16,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
 

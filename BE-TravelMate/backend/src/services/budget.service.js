@@ -1,11 +1,13 @@
 /**
  * Calculate the total budget usage of a trip dynamically.
- * @param {Object} trip - The trip object containing activities and hotel recommendation
+ * @param {Object} trip - The trip object containing metadata
+ * @param {Array} activities - Optional array of activities from Activity model
+ * @param {Object} hotelRec - Optional hotel recommendation from HotelSuggestion model
  * @returns {Object} Budget statistics
  */
-const calculateBudgetStats = (trip) => {
-  const activities = trip.activities || [];
-  const hotelRec = trip.hotelRecommendation || {};
+const calculateBudgetStats = (trip, activities, hotelRec) => {
+  const acts = (activities && activities.length > 0) ? activities : (trip.activities || []);
+  const hotel = (hotelRec && Object.keys(hotelRec).length > 0) ? hotelRec : (trip.hotelRecommendation || {});
 
   // Compute duration in days
   let durationDays = trip.totalDays || 1;
@@ -15,8 +17,9 @@ const calculateBudgetStats = (trip) => {
     durationDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1;
   }
 
-  // Calculate accommodation cost
-  const hotelCost = (hotelRec.estimatedCostPerNight || 0) * durationDays;
+  // Calculate accommodation cost (handle both field names)
+  const pricePerNight = hotel.pricePerNight !== undefined ? hotel.pricePerNight : (hotel.estimatedCostPerNight || 0);
+  const hotelCost = pricePerNight * durationDays;
 
   // Initialize category summaries
   let accommodation = hotelCost;
@@ -26,8 +29,8 @@ const calculateBudgetStats = (trip) => {
   let unforeseenExpenses = 0;
 
   // Process activities cost by category
-  activities.forEach((act) => {
-    const cost = act.cost || 0;
+  acts.forEach((act) => {
+    const cost = act.estimatedCost !== undefined ? act.estimatedCost : (act.cost || 0);
     const cat = (act.category || 'OTHER').toUpperCase();
 
     if (cat === 'HOTEL') {

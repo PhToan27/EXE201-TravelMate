@@ -7,17 +7,19 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 
 const { width, height } = Dimensions.get('window');
 
 const SplashScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -31,77 +33,61 @@ const SplashScreen = ({ navigation }) => {
         duration: 700,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        useNativeDriver: true,
-      }),
     ]).start();
   }, []);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Hero image placeholder with gradient */}
+      {/* Scenic Header Image */}
       <View style={styles.heroWrap}>
-        <LinearGradient
-          colors={['#E0F2FE', '#BAE6FD', '#7DD3FC']}
-          style={styles.heroGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          {/* Decorative circles */}
-          <View style={[styles.circle, styles.circle1]} />
-          <View style={[styles.circle, styles.circle2]} />
-          <View style={[styles.circle, styles.circle3]} />
-
-          {/* Airplane icon */}
-          <Animated.View style={[styles.airplaneWrap, { transform: [{ scale: scaleAnim }] }]}>
-            <View style={styles.airplaneBg}>
-              <Ionicons name="airplane" size={56} color={COLORS.primary} />
-            </View>
-          </Animated.View>
-        </LinearGradient>
+        <Image
+          source={{ uri: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=800' }}
+          style={styles.heroImage}
+          resizeMode="cover"
+        />
+        {/* Logo overlay on top left of image */}
+        <View style={[styles.logoOverlay, { top: insets.top + SPACING.sm }]}>
+          <View style={styles.logoBadge}>
+            <Ionicons name="globe-outline" size={14} color={COLORS.white} />
+            <Text style={styles.logoBadgeText}>TravelMate</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Bottom content */}
+      {/* Bottom Content Card */}
       <Animated.View
         style={[
           styles.content,
           {
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
+            paddingBottom: insets.bottom + SPACING.sm,
           },
         ]}
       >
-        <View style={styles.logoRow}>
-          <View style={styles.logoIcon}>
-            <Ionicons name="map" size={22} color={COLORS.white} />
-          </View>
-          <Text style={styles.logoText}>
-            Travel<Text style={styles.logoHighlight}>Mate</Text>
-          </Text>
+        {/* Orange Map Icon */}
+        <View style={styles.mapIconWrap}>
+          <Ionicons name="map-outline" size={24} color={COLORS.primary} />
         </View>
 
+        {/* Title */}
+        <Text style={styles.welcomeText}>Chào mừng bạn đến với</Text>
+        <Text style={styles.appName}>TravelMate</Text>
+
         <Text style={styles.tagline}>
-          Kế hoạch thông minh,{'\n'}hành trình trọn vẹn
+          Kế hoạch thông minh, hành trình trọn vẹn
         </Text>
 
+        {/* Action Buttons */}
         <TouchableOpacity
           style={styles.startBtn}
           onPress={() => navigation.navigate('Register')}
           activeOpacity={0.9}
         >
-          <LinearGradient
-            colors={['#F97316', '#EA6C0A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.startGradient}
-          >
-            <Text style={styles.startText}>Bắt đầu ngay</Text>
-            <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
-          </LinearGradient>
+          <Text style={styles.startText}>Bắt đầu ngay</Text>
+          <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -111,28 +97,28 @@ const SplashScreen = ({ navigation }) => {
         >
           <Text style={styles.loginText}>Đăng nhập</Text>
         </TouchableOpacity>
-      </Animated.View>
 
-      {/* Bottom nav placeholder bar */}
-      <View style={styles.bottomBar}>
-        <BottomTab icon="person-outline" label="AI GỢI Ý" />
-        <BottomTab icon="calendar-outline" label="LỊCH TRÌNH" />
-        <BottomTab icon="save-outline" label="TIẾT KIỆM" />
-      </View>
+        {/* Bottom Nav Placeholder Tabs */}
+        <View style={styles.bottomBar}>
+          <BottomTab icon="sparkles" label="AI GỢI Ý" />
+          <BottomTab icon="calendar-outline" label="LỊCH TRÌNH" />
+          <BottomTab icon="wallet-outline" label="TIẾT KIỆM" />
+        </View>
+      </Animated.View>
     </View>
   );
 };
 
 const BottomTab = ({ icon, label }) => (
   <View style={tabStyles.tab}>
-    <Ionicons name={icon} size={20} color={COLORS.gray[500]} />
+    <Ionicons name={icon} size={20} color={COLORS.gray[400]} />
     <Text style={tabStyles.label}>{label}</Text>
   </View>
 );
 
 const tabStyles = StyleSheet.create({
-  tab: { alignItems: 'center', gap: 3 },
-  label: { fontSize: 9, color: COLORS.gray[500], fontWeight: '600' },
+  tab: { alignItems: 'center', gap: 4, flex: 1 },
+  label: { fontSize: 9, color: COLORS.gray[500], fontWeight: '700' },
 });
 
 const styles = StyleSheet.create({
@@ -141,106 +127,112 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   heroWrap: {
-    height: height * 0.5,
-    overflow: 'hidden',
+    height: height * 0.52,
+    position: 'relative',
   },
-  heroGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
-  circle: {
+  logoOverlay: {
     position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    left: SPACING.md,
   },
-  circle1: { width: 300, height: 300, top: -80, right: -80 },
-  circle2: { width: 200, height: 200, bottom: -40, left: -40 },
-  circle3: { width: 120, height: 120, top: 80, left: 40 },
-  airplaneWrap: {
+  logoBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  airplaneBg: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
+  logoBadgeText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 12,
   },
   content: {
     flex: 1,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -24,
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl,
+    paddingTop: SPACING.lg,
     alignItems: 'center',
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  logoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
+  mapIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: SPACING.sm,
   },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '800',
+  welcomeText: {
+    fontSize: 20,
+    fontWeight: '700',
     color: COLORS.black,
   },
-  logoHighlight: {
+  appName: {
+    fontSize: 28,
+    fontWeight: '900',
     color: COLORS.primary,
+    marginBottom: SPACING.xs,
   },
   tagline: {
-    fontSize: 15,
+    fontSize: 13,
     color: COLORS.gray[500],
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
   startBtn: {
     width: '100%',
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    marginBottom: SPACING.md,
-  },
-  startGradient: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    marginBottom: SPACING.sm,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   startText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.white,
   },
   loginBtn: {
-    paddingVertical: 12,
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: COLORS.gray[200],
+    borderRadius: RADIUS.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
   loginText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.gray[600],
+    fontWeight: '700',
+    color: COLORS.gray[700],
   },
   bottomBar: {
     flexDirection: 'row',
+    width: '100%',
     justifyContent: 'space-around',
-    paddingVertical: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.gray[100],
-    paddingBottom: SPACING.lg,
+    paddingTop: SPACING.md,
+    marginTop: 'auto',
   },
 });
 

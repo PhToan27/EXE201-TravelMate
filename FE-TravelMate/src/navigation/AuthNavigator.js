@@ -14,12 +14,12 @@ const AuthNavigator = () => {
       <Stack.Screen
         name="Login"
         component={LoginScreen}
-        options={{ animation: 'slide_from_right' }}
+        options={{ animation: 'slide_from_right', gestureEnabled: false }}
       />
       <Stack.Screen
         name="Register"
         component={RegisterScreen}
-        options={{ animation: 'slide_from_right' }}
+        options={{ animation: 'slide_from_right', gestureEnabled: false }}
       />
     </Stack.Navigator>
   );

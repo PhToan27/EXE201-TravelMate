@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -10,7 +10,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, FONTS } from '../../utils/constants';
 
 /**
- * CustomInput — styled text input with optional left icon, label, error, and password toggle
+ * CustomInput — styled text input with optional left icon, label, error, and password toggle.
+ * Uses a ref + TouchableOpacity wrapper to manually focus the TextInput on press,
+ * bypassing potential native gesture-handler / navigation-transition focus issues on iOS.
  */
 const CustomInput = ({
   label,
@@ -32,11 +34,20 @@ const CustomInput = ({
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const inputRef = useRef(null);
+
+  const handleWrapperPress = () => {
+    if (editable && inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
 
   return (
     <View style={[styles.container, style]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={handleWrapperPress}
         style={[
           styles.inputWrapper,
           isFocused && styles.focused,
@@ -46,6 +57,7 @@ const CustomInput = ({
       >
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -78,7 +90,7 @@ const CustomInput = ({
             />
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );

@@ -1,7 +1,7 @@
 // API Configuration
 // Chọn URL phù hợp với môi trường chạy Expo của bạn:
 // 1. Dành cho Android Emulator:
-export const API_BASE_URL = 'http://10.0.2.2:5000/api';
+export const API_BASE_URL = 'http://192.168.1.6:5000/api';
 // 2. Dành cho iOS Simulator hoặc Web:
 // export const API_BASE_URL = 'http://127.0.0.1:5000/api';
 // 3. Dành cho điện thoại thật (quét QR code bằng Expo Go):
@@ -85,6 +85,7 @@ export const ACTIVITY_CATEGORIES = {
 export const TRANSPORT_TYPES = {
   WALKING: { label: 'Đi bộ', icon: 'walk' },
   BIKE: { label: 'Xe đạp', icon: 'bicycle' },
+  MOTORBIKE: { label: 'Xe máy', icon: 'bicycle' },
   CAR: { label: 'Ô tô', icon: 'car' },
   BUS: { label: 'Xe buýt', icon: 'bus' },
   TAXI: { label: 'Taxi', icon: 'car-sport' },

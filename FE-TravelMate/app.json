@@ -22,6 +22,9 @@
       },
       "package": "com.travelmate.app"
     },
-    "web": {}
+    "web": {},
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

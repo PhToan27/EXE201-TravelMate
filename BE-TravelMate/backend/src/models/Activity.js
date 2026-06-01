@@ -35,7 +35,7 @@ const activitySchema = new mongoose.Schema(
 
     transport: {
       type: String,
-      enum: ["WALKING", "BIKE", "CAR", "BUS", "TAXI", "GRAB", "OTHER"],
+      enum: ["WALKING", "BIKE", "MOTORBIKE","CAR", "BUS", "TAXI", "GRAB", "OTHER"],
     },
 
     travelDistanceKm: Number,

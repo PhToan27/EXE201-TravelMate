@@ -1,73 +1,5 @@
 const mongoose = require("mongoose");
 
-const activitySchema = new mongoose.Schema({
-  day: Number,
-  time: String,
-  location: String,
-  description: String,
-  cost: {
-    type: Number,
-    default: 0,
-  },
-  category: {
-    type: String,
-    enum: ["FOOD", "PLACE", "HOTEL", "TRANSPORT", "REST", "SHOPPING", "OTHER"],
-    default: "OTHER",
-  },
-  transport: {
-    type: String,
-    enum: ["WALKING", "BIKE", "CAR", "BUS", "TAXI", "GRAB", "OTHER"],
-  },
-  durationMinutes: Number,
-});
-
-const hotelRecommendationSchema = new mongoose.Schema({
-  name: String,
-  address: String,
-  description: String,
-  estimatedCostPerNight: {
-    type: Number,
-    default: 0,
-  },
-  rating: Number,
-  area: String,
-});
-
-const restaurantRecommendationSchema = new mongoose.Schema({
-  name: String,
-  address: String,
-  cuisineType: String,
-  averagePricePerPerson: {
-    type: Number,
-    default: 0,
-  },
-  rating: Number,
-  description: String,
-});
-
-const budgetBreakdownSchema = new mongoose.Schema({
-  accommodation: {
-    type: Number,
-    default: 0,
-  },
-  foodAndBeverage: {
-    type: Number,
-    default: 0,
-  },
-  activitiesAndEntranceFees: {
-    type: Number,
-    default: 0,
-  },
-  transportation: {
-    type: Number,
-    default: 0,
-  },
-  unforeseenExpenses: {
-    type: Number,
-    default: 0,
-  },
-});
-
 const tripSchema = new mongoose.Schema(
   {
     userId: {
@@ -122,19 +54,6 @@ const tripSchema = new mongoose.Schema(
       default: "SAVED",
     },
 
-    activities: {
-      type: [activitySchema],
-      default: [],
-    },
-
-    hotelRecommendation: hotelRecommendationSchema,
-    restaurantRecommendations: {
-      type: [restaurantRecommendationSchema],
-      default: [],
-    },
-
-    budgetBreakdown: budgetBreakdownSchema,
-
     totalEstimatedCost: {
       type: Number,
       default: 0,
@@ -147,12 +66,6 @@ const tripSchema = new mongoose.Schema(
     isPublic: {
       type: Boolean,
       default: false,
-    },
-
-    shareCode: {
-      type: String,
-      unique: true,
-      sparse: true,
     },
   },
   { timestamps: true }
