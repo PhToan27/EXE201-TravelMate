@@ -12,6 +12,37 @@ const AiLog = require('../models/AiLog');
 const aiService = require('../services/ai.service');
 const budgetService = require('../services/budget.service');
 
+const normalizePackingList = (packingList = {}) => ({
+  selectedModes: Array.isArray(packingList.selectedModes) ? packingList.selectedModes : [],
+  checkedItems:
+    packingList.checkedItems instanceof Map
+      ? Object.fromEntries(packingList.checkedItems)
+      : packingList.checkedItems || {},
+  customItems: Array.isArray(packingList.customItems) ? packingList.customItems : [],
+  updatedAt: packingList.updatedAt,
+});
+
+const sanitizePackingList = (packingList = {}) => ({
+  selectedModes: Array.isArray(packingList.selectedModes)
+    ? packingList.selectedModes.filter(Boolean).map(String)
+    : [],
+  checkedItems:
+    packingList.checkedItems && typeof packingList.checkedItems === 'object'
+      ? Object.fromEntries(
+          Object.entries(packingList.checkedItems).map(([key, value]) => [key, Boolean(value)])
+        )
+      : {},
+  customItems: Array.isArray(packingList.customItems)
+    ? packingList.customItems
+        .filter(item => item && item.name)
+        .map(item => ({
+          id: String(item.id || new mongoose.Types.ObjectId()),
+          name: String(item.name).trim(),
+        }))
+    : [],
+  updatedAt: new Date(),
+});
+
 /**
  * @desc    Create a new trip
  * @route   POST /api/trips
@@ -197,6 +228,7 @@ const createTrip = async (req, res) => {
               tripId: trip._id,
               itineraryDayId: dayDoc._id,
               time: act.time,
+              endTime: act.endTime || '',
               title: act.activityName || act.location || 'Hoạt động',
               description: act.description || '',
               category: (act.category || 'OTHER').toUpperCase(),
@@ -236,6 +268,7 @@ const createTrip = async (req, res) => {
         _id: act._id,
         day: parentDay ? parentDay.dayNumber : 1,
         time: act.time,
+        endTime: act.endTime || '',
         location: act.locationName || act.title || '',
         description: act.description || '',
         cost: act.estimatedCost || 0,
@@ -275,6 +308,7 @@ const createTrip = async (req, res) => {
       success: true, 
       data: {
         ...trip.toObject(),
+        packingList: normalizePackingList(trip.packingList),
         activities: formattedActivities,
         hotelRecommendation: formattedHotelRec,
         restaurantRecommendations: formattedRestaurants,
@@ -322,6 +356,7 @@ const getTrips = async (req, res) => {
       const budgetStats = budgetService.calculateBudgetStats(trip, tripActs, tripHotel);
       return {
         ...trip.toObject(),
+        packingList: normalizePackingList(trip.packingList),
         budgetStats,
       };
     });
@@ -385,6 +420,7 @@ const getTripById = async (req, res) => {
       _id: act._id,
       day: dayMap[act.itineraryDayId?.toString()] || 1,
       time: act.time,
+      endTime: act.endTime || '',
       location: act.locationName || act.title || '',
       description: act.description || '',
       cost: act.estimatedCost || 0,
@@ -405,6 +441,7 @@ const getTripById = async (req, res) => {
       success: true,
       data: {
         ...trip.toObject(),
+        packingList: normalizePackingList(trip.packingList),
         activities,
         hotelRecommendation,
         restaurantRecommendations,
@@ -442,12 +479,15 @@ const updateTrip = async (req, res) => {
       'travelStyle',
       'interests',
       'status',
-      'isPublic'
+      'isPublic',
+      'packingList'
     ];
 
     allowedUpdates.forEach(update => {
       if (req.body[update] !== undefined) {
-        trip[update] = req.body[update];
+        trip[update] = update === 'packingList'
+          ? sanitizePackingList(req.body[update])
+          : req.body[update];
       }
     });
 
@@ -533,6 +573,7 @@ const updateTrip = async (req, res) => {
             {
               itineraryDayId: dayDoc._id,
               time: act.time,
+              endTime: act.endTime || '',
               title: act.location || act.title || 'Hoạt động',
               description: act.description || '',
               category: (act.category || 'OTHER').toUpperCase(),
@@ -550,6 +591,7 @@ const updateTrip = async (req, res) => {
             tripId: trip._id,
             itineraryDayId: dayDoc._id,
             time: act.time,
+            endTime: act.endTime || '',
             title: act.location || act.title || 'Hoạt động',
             description: act.description || '',
             category: (act.category || 'OTHER').toUpperCase(),
@@ -600,6 +642,7 @@ const updateTrip = async (req, res) => {
       _id: act._id,
       day: dayMap[act.itineraryDayId?.toString()] || 1,
       time: act.time,
+      endTime: act.endTime || '',
       location: act.locationName || act.title || '',
       description: act.description || '',
       cost: act.estimatedCost || 0,
@@ -643,6 +686,7 @@ const updateTrip = async (req, res) => {
       success: true,
       data: {
         ...trip.toObject(),
+        packingList: normalizePackingList(trip.packingList),
         activities: formattedActivities,
         hotelRecommendation: formattedHotelRec,
         restaurantRecommendations: formattedRestaurants,
@@ -650,6 +694,53 @@ const updateTrip = async (req, res) => {
         shareCode: shareDoc ? shareDoc.shareCode : undefined,
         budgetStats: stats,
       }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * @desc    Get packing list for a trip
+ * @route   GET /api/trips/:id/packing-list
+ * @access  Private
+ */
+const getPackingList = async (req, res) => {
+  try {
+    const trip = await Trip.findOne({ _id: req.params.id, userId: req.user._id });
+
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: normalizePackingList(trip.packingList),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * @desc    Save packing list for a trip
+ * @route   PUT /api/trips/:id/packing-list
+ * @access  Private
+ */
+const updatePackingList = async (req, res) => {
+  try {
+    const trip = await Trip.findOne({ _id: req.params.id, userId: req.user._id });
+
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    trip.packingList = sanitizePackingList(req.body || {});
+    await trip.save();
+
+    return res.json({
+      success: true,
+      data: normalizePackingList(trip.packingList),
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -790,6 +881,7 @@ const getSharedTrip = async (req, res) => {
       _id: act._id,
       day: dayMap[act.itineraryDayId?.toString()] || 1,
       time: act.time,
+      endTime: act.endTime || '',
       location: act.locationName || act.title || '',
       description: act.description || '',
       cost: act.estimatedCost || 0,
@@ -811,6 +903,7 @@ const getSharedTrip = async (req, res) => {
       success: true,
       data: {
         ...trip.toObject(),
+        packingList: normalizePackingList(trip.packingList),
         activities,
         hotelRecommendation,
         restaurantRecommendations,
@@ -829,6 +922,8 @@ module.exports = {
   getTrips,
   getTripById,
   updateTrip,
+  getPackingList,
+  updatePackingList,
   deleteTrip,
   shareTrip,
   getSharedTrip,
