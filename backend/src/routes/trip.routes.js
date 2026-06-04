@@ -4,6 +4,8 @@ const {
   getTrips,
   getTripById,
   updateTrip,
+  getPackingList,
+  updatePackingList,
   deleteTrip,
   shareTrip,
   getSharedTrip,
@@ -26,6 +28,10 @@ router.route('/:id')
   .get(getTripById)
   .put(updateTrip)
   .delete(deleteTrip);
+
+router.route('/:id/packing-list')
+  .get(getPackingList)
+  .put(updatePackingList);
 
 router.post('/:id/share', shareTrip);
 
