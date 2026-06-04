@@ -17,37 +17,31 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import PlaceDetailScreen from '../screens/trip/PlaceDetailScreen';
 import RouteMapScreen from '../screens/trip/RouteMapScreen';
+import CommunityScreen from '../screens/community/CommunityScreen';
+import PostDetailScreen from '../screens/community/PostDetailScreen';
+import SearchPlacesScreen from '../screens/place/SearchPlacesScreen';
 
-import { COLORS, RADIUS } from '../utils/constants';
+import { COLORS } from '../utils/constants';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Root stack to allow modal-style screens over the tab bar
-const RootStack = () => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Tabs" component={TabNavigator} />
-      <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="CreateTrip" component={CreateTripScreen} options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
-      <Stack.Screen name="EditTrip" component={EditTripScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="SharedTrip" component={SharedTripScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="HotelSuggestion" component={HotelSuggestionScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="RestaurantSuggestion" component={RestaurantSuggestionScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="BudgetBreakdown" component={BudgetBreakdownScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="RouteMap" component={RouteMapScreen} options={{ animation: 'slide_from_right' }} />
-    </Stack.Navigator>
-  );
-};
-
-const CommunityPlaceholder = () => (
-  <View style={placeholderStyles.container}>
-    <Ionicons name="globe-outline" size={64} color={COLORS.primary} />
-    <Text style={placeholderStyles.title}>Cộng đồng du lịch</Text>
-    <Text style={placeholderStyles.subtitle}>Tính năng Cộng đồng đang được phát triển. Hãy đón chờ nhé!</Text>
-  </View>
+const RootStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Tabs" component={TabNavigator} />
+    <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="CreateTrip" component={CreateTripScreen} options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+    <Stack.Screen name="EditTrip" component={EditTripScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="SharedTrip" component={SharedTripScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="HotelSuggestion" component={HotelSuggestionScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="RestaurantSuggestion" component={RestaurantSuggestionScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="BudgetBreakdown" component={BudgetBreakdownScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="RouteMap" component={RouteMapScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="SearchPlaces" component={SearchPlacesScreen} options={{ animation: 'slide_from_right' }} />
+  </Stack.Navigator>
 );
 
 const ExpensesPlaceholder = () => (
@@ -56,6 +50,35 @@ const ExpensesPlaceholder = () => (
     <Text style={placeholderStyles.title}>Quản lý chi phí</Text>
     <Text style={placeholderStyles.subtitle}>Tính năng quản lý chi phí tổng hợp đang được phát triển!</Text>
   </View>
+);
+
+const TabNavigator = () => (
+  <Tab.Navigator
+    screenOptions={({ route }) => ({
+      headerShown: false,
+      tabBarStyle: styles.tabBar,
+      tabBarActiveTintColor: COLORS.primary,
+      tabBarInactiveTintColor: COLORS.gray[400],
+      tabBarLabelStyle: styles.tabLabel,
+      tabBarIcon: ({ focused, color, size }) => {
+        const icons = {
+          Home: focused ? 'home' : 'home-outline',
+          SavedTrips: focused ? 'briefcase' : 'briefcase-outline',
+          Community: focused ? 'globe' : 'globe-outline',
+          Expenses: focused ? 'cash' : 'cash-outline',
+          Profile: focused ? 'person-circle' : 'person-circle-outline',
+        };
+        const iconName = icons[route.name] || 'ellipse-outline';
+        return <Ionicons name={iconName} size={size} color={color} />;
+      },
+    })}
+  >
+    <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
+    <Tab.Screen name="SavedTrips" component={SavedTripsScreen} options={{ tabBarLabel: 'Chuyến đi' }} />
+    <Tab.Screen name="Community" component={CommunityScreen} options={{ tabBarLabel: 'Cộng đồng' }} />
+    <Tab.Screen name="Expenses" component={ExpensesPlaceholder} options={{ tabBarLabel: 'Chi phí' }} />
+    <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
+  </Tab.Navigator>
 );
 
 const placeholderStyles = StyleSheet.create({
@@ -79,37 +102,6 @@ const placeholderStyles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
-const TabNavigator = () => {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.gray[400],
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarIcon: ({ focused, color, size }) => {
-          const icons = {
-            Home: focused ? 'home' : 'home-outline',
-            SavedTrips: focused ? 'briefcase' : 'briefcase-outline',
-            Community: focused ? 'globe' : 'globe-outline',
-            Expenses: focused ? 'cash' : 'cash-outline',
-            Profile: focused ? 'person-circle' : 'person-circle-outline',
-          };
-          const iconName = icons[route.name] || 'ellipse-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
-      <Tab.Screen name="SavedTrips" component={SavedTripsScreen} options={{ tabBarLabel: 'Chuyến đi' }} />
-      <Tab.Screen name="Community" component={CommunityPlaceholder} options={{ tabBarLabel: 'Cộng đồng' }} />
-      <Tab.Screen name="Expenses" component={ExpensesPlaceholder} options={{ tabBarLabel: 'Chi phí' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
-    </Tab.Navigator>
-  );
-};
 
 const styles = StyleSheet.create({
   tabBar: {

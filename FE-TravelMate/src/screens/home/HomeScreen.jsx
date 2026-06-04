@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Image,
   View,
   Text,
   StyleSheet,
@@ -14,15 +15,51 @@ import useAuth from '../../hooks/useAuth';
 import useTrip from '../../hooks/useTrip';
 import TripCard from '../../components/trip/TripCard';
 import EmptyState from '../../components/common/EmptyState';
+import * as postApi from '../../services/community/postApi';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
+
+const featuredPlaces = [
+  {
+    name: 'Bà Nà Hills',
+    location: 'Hòa Vang, Đà Nẵng',
+    imageUrl: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1000&q=80',
+  },
+  {
+    name: 'Phố Cổ Hội An',
+    location: 'Hội An, Quảng Nam',
+    imageUrl: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1000&q=80',
+  },
+  {
+    name: 'Kinh thành Huế',
+    location: 'Huế, Việt Nam',
+    imageUrl: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1000&q=80',
+  },
+];
 
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { trips, isLoading, fetchTrips } = useTrip(true);
+  const [posts, setPosts] = useState([]);
 
   const recentTrips = trips.slice(0, 3);
+  const recentPosts = posts.slice(0, 3);
   const firstName = user?.name?.split(' ').pop() || 'bạn';
+
+  useEffect(() => {
+    const fetchCommunityPosts = async () => {
+      try {
+        const result = await postApi.getPosts();
+        if (result.success) {
+          setPosts(result.data || []);
+        }
+      } catch {
+        setPosts([]);
+      }
+    };
+
+    fetchCommunityPosts();
+  }, []);
 
   return (
     <ScrollView
@@ -33,14 +70,13 @@ const HomeScreen = ({ navigation }) => {
         <RefreshControl refreshing={isLoading} onRefresh={fetchTrips} colors={[COLORS.primary]} />
       }
     >
-      {/* Header */}
       <LinearGradient
         colors={['#F97316', '#FB923C']}
         style={[styles.header, { paddingTop: insets.top + SPACING.md }]}
       >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Xin chào, {firstName} 👋</Text>
+            <Text style={styles.greeting}>Xin chào, {firstName}</Text>
             <Text style={styles.headerSub}>Bạn muốn đi đâu hôm nay?</Text>
           </View>
           <TouchableOpacity
@@ -51,10 +87,9 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Search bar style CTA */}
         <TouchableOpacity
           style={styles.searchBar}
-          onPress={() => navigation.navigate('CreateTrip')}
+          onPress={() => navigation.navigate('SearchPlaces')}
           activeOpacity={0.9}
         >
           <Ionicons name="search-outline" size={18} color={COLORS.gray[400]} />
@@ -65,7 +100,6 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* Quick actions */}
       <View style={styles.quickActions}>
         <QuickAction
           icon="add-circle"
@@ -93,7 +127,68 @@ const HomeScreen = ({ navigation }) => {
         />
       </View>
 
-      {/* Recent trips */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Địa điểm nổi bật</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('SearchPlaces')}>
+            <Text style={styles.seeAll}>Xem tất cả</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>
+          {featuredPlaces.map((place) => (
+            <TouchableOpacity
+              key={place.name}
+              style={styles.featuredCard}
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('PlaceDetail', { placeName: place.name })}
+            >
+              <Image source={{ uri: place.imageUrl }} style={styles.featuredImage} />
+              <View style={styles.featuredGradient} />
+              <TouchableOpacity style={styles.featuredHeart}>
+                <Ionicons name="heart-outline" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
+              <View style={styles.featuredBody}>
+                <Text style={styles.featuredName} numberOfLines={1}>{place.name}</Text>
+                <View style={styles.featuredLocation}>
+                  <Ionicons name="location-outline" size={12} color={COLORS.white} />
+                  <Text style={styles.featuredLocationText} numberOfLines={1}>{place.location}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Bài viết cộng đồng</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Community')}>
+            <Text style={styles.seeAll}>Xem tất cả</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.postRail}>
+          {recentPosts.map((post) => (
+            <TouchableOpacity
+              key={post._id}
+              style={styles.postCard}
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('PostDetail', { postId: post._id, post })}
+            >
+              <View style={styles.postImageWrap}>
+                <Ionicons name="newspaper-outline" size={22} color={COLORS.white} style={styles.postImageIcon} />
+                <Text style={styles.postImageLabel} numberOfLines={1}>{post.category || 'Du lịch'}</Text>
+              </View>
+              <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
+              <Text style={styles.postMeta} numberOfLines={1}>
+                {post.author?.name || 'TravelMate'} • {post.readTime || '3 phút đọc'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Chuyến đi gần đây</Text>
@@ -215,6 +310,7 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -231,6 +327,106 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  featuredRail: {
+    gap: SPACING.sm,
+    paddingRight: SPACING.md,
+  },
+  featuredCard: {
+    width: 170,
+    height: 220,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    backgroundColor: COLORS.gray[100],
+  },
+  featuredImage: {
+    width: '100%',
+    height: '100%',
+  },
+  featuredGradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  featuredHeart: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredBody: {
+    position: 'absolute',
+    left: SPACING.sm,
+    right: SPACING.sm,
+    bottom: SPACING.sm,
+  },
+  featuredName: {
+    fontSize: 14,
+    color: COLORS.white,
+    fontWeight: '900',
+  },
+  featuredLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 3,
+  },
+  featuredLocationText: {
+    flex: 1,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+  },
+  postRail: {
+    gap: SPACING.sm,
+    paddingRight: SPACING.md,
+  },
+  postCard: {
+    width: 220,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  postImageWrap: {
+    height: 92,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primary,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  postImageIcon: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    opacity: 0.85,
+  },
+  postImageLabel: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  postTitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: COLORS.black,
+    fontWeight: '800',
+  },
+  postMeta: {
+    fontSize: 11,
+    color: COLORS.gray[500],
+    marginTop: 6,
   },
   createBtn: {
     borderRadius: RADIUS.lg,
