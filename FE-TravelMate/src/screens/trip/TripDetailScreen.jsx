@@ -73,6 +73,9 @@ const TripDetailScreen = ({ route, navigation }) => {
             <Ionicons name="chevron-back" size={24} color={COLORS.white} />
           </TouchableOpacity>
           <View style={styles.heroActions}>
+            <TouchableOpacity onPress={() => navigation.navigate('PackingList', { tripId })} style={styles.heroAction}>
+              <Ionicons name="bag-handle-outline" size={20} color={COLORS.white} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('EditTrip', { tripId })} style={styles.heroAction}>
               <Ionicons name="pencil-outline" size={20} color={COLORS.white} />
             </TouchableOpacity>

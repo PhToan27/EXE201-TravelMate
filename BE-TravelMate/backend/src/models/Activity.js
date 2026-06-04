@@ -15,6 +15,7 @@ const activitySchema = new mongoose.Schema(
     },
 
     time: String,
+    endTime: String,
     title: String,
     description: String,
 

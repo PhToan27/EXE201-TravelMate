@@ -67,6 +67,28 @@ const tripSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    packingList: {
+      selectedModes: {
+        type: [String],
+        default: [],
+      },
+      checkedItems: {
+        type: Map,
+        of: Boolean,
+        default: {},
+      },
+      customItems: {
+        type: [
+          {
+            id: String,
+            name: String,
+          },
+        ],
+        default: [],
+      },
+      updatedAt: Date,
+    },
   },
   { timestamps: true }
 );

@@ -9,6 +9,7 @@ import SavedTripsScreen from '../screens/trip/SavedTripsScreen';
 import CreateTripScreen from '../screens/trip/CreateTripScreen';
 import TripDetailScreen from '../screens/trip/TripDetailScreen';
 import EditTripScreen from '../screens/trip/EditTripScreen';
+import PackingListScreen from '../screens/trip/PackingListScreen';
 import SharedTripScreen from '../screens/trip/SharedTripScreen';
 import HotelSuggestionScreen from '../screens/hotel/HotelSuggestionScreen';
 import RestaurantSuggestionScreen from '../screens/restaurant/RestaurantSuggestionScreen';
@@ -32,6 +33,7 @@ const RootStack = () => (
     <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="CreateTrip" component={CreateTripScreen} options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
     <Stack.Screen name="EditTrip" component={EditTripScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="PackingList" component={PackingListScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="SharedTrip" component={SharedTripScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="HotelSuggestion" component={HotelSuggestionScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="RestaurantSuggestion" component={RestaurantSuggestionScreen} options={{ animation: 'slide_from_right' }} />
