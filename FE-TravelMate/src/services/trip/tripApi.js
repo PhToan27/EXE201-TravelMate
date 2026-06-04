@@ -38,6 +38,24 @@ export const updateTrip = async (id, updates) => {
 };
 
 /**
+ * Get packing list for a trip
+ * GET /api/trips/:id/packing-list
+ */
+export const getPackingList = async (id) => {
+  const response = await api.get(`/trips/${id}/packing-list`);
+  return response.data;
+};
+
+/**
+ * Save packing list for a trip
+ * PUT /api/trips/:id/packing-list
+ */
+export const updatePackingList = async (id, packingList) => {
+  const response = await api.put(`/trips/${id}/packing-list`, packingList);
+  return response.data;
+};
+
+/**
  * Delete a trip
  * DELETE /api/trips/:id
  */
