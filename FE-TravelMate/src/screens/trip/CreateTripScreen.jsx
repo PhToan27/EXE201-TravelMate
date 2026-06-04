@@ -307,7 +307,7 @@ const CreateTripScreen = ({ navigation }) => {
               display="spinner"
               locale="vi-VN"
               minimumDate={pickerTarget === 'end' ? startDateObj : new Date()}
-              onChange={(event, date) => {
+              onValueChange={(date) => {
                 if (date) setTempDate(date);
               }}
               style={styles.datePicker}
