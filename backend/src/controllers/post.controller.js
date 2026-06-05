@@ -63,7 +63,7 @@ const uploadImage = (file) => new Promise((resolve, reject) => {
 
 const getPosts = async (req, res) => {
   try {
-    const posts = await Post.find()
+    const posts = await Post.find({ status: 'approved' })
       .populate('author', 'name email following')
       .populate('comments.author', 'name email')
       .sort({ createdAt: -1 })
@@ -108,6 +108,7 @@ const createPost = async (req, res) => {
       imagePublicId = uploadResult.public_id;
     }
 
+    // New posts are pending by default
     const post = await Post.create({
       title,
       excerpt: excerpt || buildExcerpt(content),
@@ -116,6 +117,7 @@ const createPost = async (req, res) => {
       imageUrl,
       imagePublicId,
       author: req.user._id,
+      status: 'pending',
     });
 
     const populatedPost = await getPopulatedPost(post._id);

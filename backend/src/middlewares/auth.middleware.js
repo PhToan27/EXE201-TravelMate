@@ -34,4 +34,11 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+const adminProtect = (req, res, next) => {
+  if (req.user && ['admin', 'moderator', 'analyst'].includes(req.user.role)) {
+    return next();
+  }
+  return res.status(403).json({ success: false, message: 'Access denied: admin permission required.' });
+};
+
+module.exports = { protect, adminProtect };
