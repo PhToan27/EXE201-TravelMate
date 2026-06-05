@@ -70,6 +70,15 @@ const postSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'approved',
+    },
+    reported: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

@@ -4,10 +4,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import useAuth from '../hooks/useAuth';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
+import AdminNavigator from './AdminNavigator';
 import { COLORS } from '../utils/constants';
 
 const AppNavigator = () => {
-  const { isAuthenticated, isInitialized } = useAuth();
+  const { isAuthenticated, isInitialized, user } = useAuth();
 
   if (!isInitialized) {
     return (
@@ -17,9 +18,16 @@ const AppNavigator = () => {
     );
   }
 
+  // Check if authenticated user is admin, moderator, or analyst
+  const isAdminUser = user && ['admin', 'moderator', 'analyst'].includes(user.role);
+
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
+      {isAuthenticated ? (
+        isAdminUser ? <AdminNavigator /> : <MainNavigator />
+      ) : (
+        <AuthNavigator />
+      )}
     </NavigationContainer>
   );
 };

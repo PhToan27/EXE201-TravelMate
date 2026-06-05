@@ -35,6 +35,21 @@ const userSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    role: {
+      type: String,
+      enum: ['user', 'admin', 'moderator', 'analyst'],
+      default: 'user',
+    },
+    package: {
+      type: String,
+      enum: ['free', 'premium'],
+      default: 'free',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'suspended'],
+      default: 'active',
+    },
   },
   {
     timestamps: true,

@@ -39,6 +39,9 @@ const registerUser = async (req, res) => {
           _id: user._id,
           name: user.name,
           email: user.email,
+          role: user.role || 'user',
+          package: user.package || 'free',
+          status: user.status || 'active',
           token: generateToken(user._id),
         },
       });
@@ -68,6 +71,9 @@ const loginUser = async (req, res) => {
           _id: user._id,
           name: user.name,
           email: user.email,
+          role: user.role || 'user',
+          package: user.package || 'free',
+          status: user.status || 'active',
           token: generateToken(user._id),
         },
       });
@@ -95,6 +101,9 @@ const getUserProfile = async (req, res) => {
           _id: user._id,
           name: user.name,
           email: user.email,
+          role: user.role || 'user',
+          package: user.package || 'free',
+          status: user.status || 'active',
           preferences: user.preferences,
         },
       });

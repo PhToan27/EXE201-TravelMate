@@ -1,13 +1,17 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/db');
 
 // Load environment variables
 dotenv.config();
 
-// Connect to Database
-connectDB();
+// Connect to Database & Seed Sample Data
+connectDB().then(() => {
+  const seedAdminData = require('./services/seedData');
+  seedAdminData();
+});
 
 const app = express();
 
@@ -28,6 +32,9 @@ app.use('/api/trips', require('./routes/trip.routes'));
 app.use('/api/map', require('./routes/map.routes'));
 app.use('/api/places', require('./routes/place.routes'));
 app.use('/api/posts', require('./routes/post.routes'));
+app.use('/api/admin', require('./routes/admin.routes'));
+
+
 
 // Basic testing route
 app.get('/health', (req, res) => {
