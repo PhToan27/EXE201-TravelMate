@@ -1,7 +1,7 @@
 // API Configuration
 // Chọn URL phù hợp với môi trường chạy Expo của bạn:
 // 1. Dành cho Android Emulator:
-export const API_BASE_URL = 'http://192.168.1.95:5000/api';
+export const API_BASE_URL = 'http://192.168.1.14:5000/api';
 // 2. Dành cho iOS Simulator hoặc Web:
 // export const API_BASE_URL = 'http://127.0.0.1:5000/api';
 // 3. Dành cho điện thoại thật (quét QR code bằng Expo Go):
