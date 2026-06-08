@@ -20,6 +20,10 @@ import PlaceDetailScreen from '../screens/trip/PlaceDetailScreen';
 import RouteMapScreen from '../screens/trip/RouteMapScreen';
 import CommunityScreen from '../screens/community/CommunityScreen';
 import PostDetailScreen from '../screens/community/PostDetailScreen';
+import MyPostsScreen from '../screens/community/MyPostsScreen';
+import NotificationsScreen from '../screens/community/NotificationsScreen';
+import UserProfileScreen from '../screens/community/UserProfileScreen';
+import AdminModerationScreen from '../screens/community/AdminModerationScreen';
 import SearchPlacesScreen from '../screens/place/SearchPlacesScreen';
 
 import { COLORS } from '../utils/constants';
@@ -42,6 +46,10 @@ const RootStack = () => (
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="RouteMap" component={RouteMapScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="MyPosts" component={MyPostsScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="AdminModeration" component={AdminModerationScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="SearchPlaces" component={SearchPlacesScreen} options={{ animation: 'slide_from_right' }} />
   </Stack.Navigator>
 );

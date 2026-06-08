@@ -10,6 +10,36 @@ export const getPostById = async (id) => {
   return response.data;
 };
 
+export const getMyPosts = async () => {
+  const response = await api.get('/posts/me/posts');
+  return response.data;
+};
+
+export const getNotifications = async () => {
+  const response = await api.get('/posts/notifications');
+  return response.data;
+};
+
+export const markNotificationRead = async (id) => {
+  const response = await api.patch(`/posts/notifications/${id}/read`);
+  return response.data;
+};
+
+export const getUserProfile = async (id) => {
+  const response = await api.get(`/posts/users/${id}`);
+  return response.data;
+};
+
+export const getAdminPosts = async (params = {}) => {
+  const response = await api.get('/posts/admin/posts', { params });
+  return response.data;
+};
+
+export const updatePostStatus = async (id, { status, reason }) => {
+  const response = await api.patch(`/posts/admin/posts/${id}/status`, { status, reason });
+  return response.data;
+};
+
 export const createPost = async ({ title, content, category, image }) => {
   const formData = new FormData();
   formData.append('title', title);
@@ -44,6 +74,11 @@ export const addComment = async (id, content) => {
 
 export const sharePost = async (id) => {
   const response = await api.post(`/posts/${id}/share`);
+  return response.data;
+};
+
+export const reportPost = async (id) => {
+  const response = await api.post(`/posts/${id}/report`);
   return response.data;
 };
 
