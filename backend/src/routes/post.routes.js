@@ -5,11 +5,18 @@ const User = require('../models/User');
 const {
   addComment,
   createPost,
+  getAdminPosts,
+  getMyPosts,
+  getNotifications,
   getPostById,
   getPosts,
+  getUserProfile,
   incrementShare,
+  markNotificationRead,
+  reportPost,
   toggleFollowAuthor,
   toggleLikePost,
+  updatePostStatus,
 } = require('../controllers/post.controller');
 const { protect } = require('../middlewares/auth.middleware');
 
@@ -37,6 +44,21 @@ const optionalProtect = async (req, res, next) => {
   return next();
 };
 
+const requireModerator = (req, res, next) => {
+  if (!['admin', 'moderator'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Admin/moderator only' });
+  }
+  return next();
+};
+
+router.get('/me/posts', protect, getMyPosts);
+router.get('/notifications', protect, getNotifications);
+router.patch('/notifications/:id/read', protect, markNotificationRead);
+router.get('/users/:id', optionalProtect, getUserProfile);
+
+router.get('/admin/posts', protect, requireModerator, getAdminPosts);
+router.patch('/admin/posts/:id/status', protect, requireModerator, updatePostStatus);
+
 router.get('/', optionalProtect, getPosts);
 router.get('/:id', optionalProtect, getPostById);
 router.post('/', protect, upload.single('image'), createPost);
@@ -44,5 +66,6 @@ router.post('/authors/:authorId/follow', protect, toggleFollowAuthor);
 router.post('/:id/like', protect, toggleLikePost);
 router.post('/:id/comments', protect, addComment);
 router.post('/:id/share', incrementShare);
+router.post('/:id/report', protect, reportPost);
 
 module.exports = router;

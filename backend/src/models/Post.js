@@ -73,7 +73,31 @@ const postSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],
-      default: 'approved',
+      default: 'pending',
+    },
+    rejectionReason: {
+      type: String,
+      trim: true,
+    },
+    moderation: {
+      status: {
+        type: String,
+        enum: ['passed', 'flagged', 'rejected', 'needs_review'],
+        default: 'needs_review',
+      },
+      severity: {
+        type: String,
+        enum: ['none', 'low', 'medium', 'high'],
+        default: 'none',
+      },
+      reasons: {
+        type: [String],
+        default: [],
+      },
+      provider: {
+        type: String,
+        default: 'basic-rule',
+      },
     },
     reported: {
       type: Boolean,
