@@ -35,6 +35,12 @@ const userSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    followers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     role: {
       type: String,
       enum: ['user', 'admin', 'moderator', 'analyst'],

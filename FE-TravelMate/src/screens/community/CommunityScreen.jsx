@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import useAuth from '../../hooks/useAuth';
 import * as postApi from '../../services/community/postApi';
 import { COLORS, RADIUS, SPACING } from '../../utils/constants';
 
@@ -22,6 +23,7 @@ const tabs = ['Mới nhất', 'Xu hướng', 'Theo dõi', 'Thách thức'];
 
 const CommunityScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [posts, setPosts] = useState([]);
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,9 +86,10 @@ const CommunityScreen = ({ navigation }) => {
       });
 
       if (result.success) {
-        setPosts((current) => [result.data, ...current]);
         setForm({ title: '', content: '', category: 'Mới nhất', image: null });
         setIsComposerOpen(false);
+        Alert.alert('Đã gửi bài', result.message || 'Bài viết của bạn đang được phê duyệt');
+        fetchPosts(true);
       }
     } catch (error) {
       Alert.alert('Chưa đăng được bài', error.response?.data?.message || 'Kiểm tra Cloudinary/env rồi thử lại.');
@@ -107,9 +110,17 @@ const CommunityScreen = ({ navigation }) => {
           <Text style={styles.brandText}>Cộng đồng</Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="search-outline" size={22} color={COLORS.black} />
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('MyPosts')}>
+            <Ionicons name="document-text-outline" size={22} color={COLORS.black} />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Notifications')}>
+            <Ionicons name="notifications-outline" size={22} color={COLORS.black} />
+          </TouchableOpacity>
+          {['admin', 'moderator'].includes(user?.role) && (
+            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('AdminModeration')}>
+              <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.iconButton} onPress={() => setIsComposerOpen(true)}>
             <Ionicons name="add-circle-outline" size={24} color={COLORS.primary} />
           </TouchableOpacity>
@@ -141,6 +152,7 @@ const CommunityScreen = ({ navigation }) => {
               key={post._id}
               post={post}
               onPress={() => navigation.navigate('PostDetail', { postId: post._id, post })}
+              onAuthorPress={() => navigation.navigate('UserProfile', { userId: post.author?._id })}
             />
           ))}
         </ScrollView>
@@ -191,10 +203,10 @@ const CommunityScreen = ({ navigation }) => {
   );
 };
 
-const PostCard = ({ post, onPress }) => (
+const PostCard = ({ post, onPress, onAuthorPress }) => (
   <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onPress}>
     {!!post.imageUrl && <Image source={{ uri: post.imageUrl }} style={styles.cover} />}
-    <View style={styles.authorRow}>
+    <TouchableOpacity style={styles.authorRow} onPress={onAuthorPress}>
       <View style={styles.avatar}>
         <Ionicons name="person" size={14} color={COLORS.primary} />
       </View>
@@ -202,7 +214,7 @@ const PostCard = ({ post, onPress }) => (
         <Text style={styles.authorName}>{post.author?.name || 'TravelMate User'}</Text>
         <Text style={styles.meta}>{post.readTime || '3 phút đọc'}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
     <Text style={styles.cardTitle}>{post.title}</Text>
     <Text style={styles.excerpt} numberOfLines={2}>{post.excerpt || post.content}</Text>
     <View style={styles.cardFooter}>
@@ -245,8 +257,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brandText: { fontSize: 18, fontWeight: '800', color: COLORS.black },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  iconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  iconButton: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
   tabs: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
