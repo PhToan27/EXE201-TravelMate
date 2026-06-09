@@ -43,6 +43,10 @@ const useTripStore = create((set, get) => ({
 
   // Create trip
   createTrip: async (tripData) => {
+    if (get().isCreating) {
+      return { success: false, message: 'Đang tạo chuyến đi, vui lòng chờ.' };
+    }
+
     set({ isCreating: true, error: null });
     try {
       const result = await tripApi.createTrip(tripData);

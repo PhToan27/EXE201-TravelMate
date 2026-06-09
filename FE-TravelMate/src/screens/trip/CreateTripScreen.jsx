@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -91,7 +91,7 @@ const defaultEnd = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
 const CreateTripScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { createTrip, isCreating } = useTrip();
-
+  const submitLockRef = useRef(false);
   const [destination, setDestination] = useState('');
   const [startDateObj, setStartDateObj] = useState(today);
   const [endDateObj, setEndDateObj] = useState(defaultEnd);
@@ -122,16 +122,21 @@ const CreateTripScreen = ({ navigation }) => {
   };
 
   const confirmPicker = () => {
+    const selectedDate = tempDate instanceof Date ? tempDate : new Date();
+
     if (pickerTarget === 'start') {
-      setStartDateObj(tempDate);
-      if (endDateObj < tempDate) {
-        setEndDateObj(new Date(tempDate.getTime() + 24 * 60 * 60 * 1000));
+      setStartDateObj(selectedDate);
+
+      if (endDateObj < selectedDate) {
+        setEndDateObj(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000));
       }
+
       setErrors((e) => ({ ...e, startDate: '' }));
     } else {
-      setEndDateObj(tempDate);
+      setEndDateObj(selectedDate);
       setErrors((e) => ({ ...e, endDate: '' }));
     }
+
     setPickerVisible(false);
   };
 
@@ -144,24 +149,31 @@ const CreateTripScreen = ({ navigation }) => {
   };
 
   const handleCreate = async () => {
+    if (submitLockRef.current || isCreating) return;
     if (!validate()) return;
-    const result = await createTrip({
-      destination: destination.trim(),
-      startDate: toDateString(startDateObj),
-      endDate: toDateString(endDateObj),
-      budget: budget ? parseInt(budget.replace(/[^\d]/g, ''), 10) : 0,
-      people: parseInt(people, 10) || 1,
-      travelStyle: travelStyles.join(', '),
-      generateAiItinerary: true, // Always use AI generating mode
-    });
 
-    if (result.success) {
-      navigation.replace('TripDetail', { tripId: result.data._id });
-    } else {
-      Alert.alert('Lỗi', result.message || 'Không thể tạo chuyến đi');
+    submitLockRef.current = true;
+
+    try {
+      const result = await createTrip({
+        destination: destination.trim(),
+        startDate: toDateString(startDateObj),
+        endDate: toDateString(endDateObj),
+        budget: budget ? parseInt(budget.replace(/[^\d]/g, ''), 10) : 0,
+        people: parseInt(people, 10) || 1,
+        travelStyle: travelStyles.join(', '),
+        generateAiItinerary: true,
+      });
+
+      if (result.success) {
+        navigation.replace('TripDetail', { tripId: result.data._id });
+      } else {
+        Alert.alert('Lỗi', result.message || 'Không thể tạo chuyến đi');
+      }
+    } finally {
+      submitLockRef.current = false;
     }
   };
-
   const travelStylesList = [
     { value: 'FOOD', label: 'Ăn uống', icon: 'restaurant-outline' },
     { value: 'BEACH', label: 'Biển', icon: 'water-outline' },
@@ -191,7 +203,7 @@ const CreateTripScreen = ({ navigation }) => {
 
         {/* Input Fields */}
         <View style={styles.form}>
-          
+
           {/* Destination */}
           <CustomInput
             label="ĐIỂM ĐẾN *"
@@ -280,6 +292,7 @@ const CreateTripScreen = ({ navigation }) => {
           title={isCreating ? 'Đang tạo lịch trình...' : 'Tạo lịch trình'}
           onPress={handleCreate}
           loading={isCreating}
+          disabled={isCreating}
           style={styles.createBtn}
           icon={<Ionicons name="rocket-outline" size={18} color={COLORS.white} />}
         />
@@ -302,13 +315,15 @@ const CreateTripScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <DateTimePicker
-              value={tempDate}
+              value={tempDate instanceof Date ? tempDate : new Date()}
               mode="date"
               display="spinner"
               locale="vi-VN"
               minimumDate={pickerTarget === 'end' ? startDateObj : new Date()}
-              onValueChange={(date) => {
-                if (date) setTempDate(date);
+              onChange={(event, selectedDate) => {
+                if (selectedDate instanceof Date) {
+                  setTempDate(selectedDate);
+                }
               }}
               style={styles.datePicker}
               textColor={COLORS.black}
