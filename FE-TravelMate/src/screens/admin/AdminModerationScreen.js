@@ -30,6 +30,16 @@ const AdminModerationScreen = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalPosts, setTotalPosts] = useState(0);
 
+  // State to track expanded posts
+  const [expandedPosts, setExpandedPosts] = useState({});
+
+  const toggleExpand = (postId) => {
+    setExpandedPosts((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+  };
+
   const fetchCounts = async () => {
     try {
       const res = await adminApi.getStats();
@@ -124,6 +134,8 @@ const AdminModerationScreen = () => {
   };
 
   const renderPostCard = ({ item }) => {
+    const isExpanded = !!expandedPosts[item._id];
+
     // Actions based on active tab
     let actionControls;
     if (activeTab === 'pending') {
@@ -131,11 +143,11 @@ const AdminModerationScreen = () => {
         <View style={styles.cardActionsContainer}>
           <View style={styles.cardActionsRow}>
             <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} onPress={() => handleModerate(item._id, 'approve')}>
-              <Ionicons name="checkmark-circle-outline" size={14} color={COLORS.white} style={{ marginRight: 4 }} />
+              <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.white} style={{ marginRight: 6 }} />
               <Text style={styles.approveBtnText}>Phê duyệt</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => handleModerate(item._id, 'reject')}>
-              <Ionicons name="close-circle-outline" size={14} color={COLORS.error} style={{ marginRight: 4 }} />
+              <Ionicons name="close-circle-outline" size={16} color={COLORS.error} style={{ marginRight: 6 }} />
               <Text style={styles.rejectBtnText}>Từ chối</Text>
             </TouchableOpacity>
           </View>
@@ -143,7 +155,7 @@ const AdminModerationScreen = () => {
             style={[styles.actionBtn, styles.editBtn]}
             onPress={() => Alert.alert('Thông báo', 'Đã gửi yêu cầu chỉnh sửa!')}
           >
-            <Ionicons name="create-outline" size={14} color={COLORS.gray[500]} style={{ marginRight: 4 }} />
+            <Ionicons name="create-outline" size={16} color={COLORS.gray[500]} style={{ marginRight: 6 }} />
             <Text style={styles.editBtnText}>Yêu cầu chỉnh sửa</Text>
           </TouchableOpacity>
         </View>
@@ -152,7 +164,7 @@ const AdminModerationScreen = () => {
       actionControls = (
         <View style={styles.cardActionsRow}>
           <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn, { flex: 1 }]} onPress={() => handleModerate(item._id, 'reject')}>
-            <Ionicons name="trash-outline" size={14} color={COLORS.error} style={{ marginRight: 4 }} />
+            <Ionicons name="trash-outline" size={16} color={COLORS.error} style={{ marginRight: 6 }} />
             <Text style={styles.rejectBtnText}>Thu hồi / Gỡ bài viết này</Text>
           </TouchableOpacity>
         </View>
@@ -161,11 +173,11 @@ const AdminModerationScreen = () => {
       actionControls = (
         <View style={styles.cardActionsRow}>
           <TouchableOpacity style={[styles.actionBtn, styles.approveBtn, { flex: 1 }]} onPress={() => handleModerate(item._id, 'clear_report')}>
-            <Ionicons name="checkmark-circle-outline" size={14} color={COLORS.white} style={{ marginRight: 4 }} />
+            <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.white} style={{ marginRight: 6 }} />
             <Text style={styles.approveBtnText}>Bỏ qua báo cáo</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn, { flex: 1 }]} onPress={() => handleModerate(item._id, 'reject')}>
-            <Ionicons name="close-circle-outline" size={14} color={COLORS.error} style={{ marginRight: 4 }} />
+            <Ionicons name="close-circle-outline" size={16} color={COLORS.error} style={{ marginRight: 6 }} />
             <Text style={styles.rejectBtnText}>Gỡ bài viết</Text>
           </TouchableOpacity>
         </View>
@@ -174,36 +186,71 @@ const AdminModerationScreen = () => {
 
     return (
       <View style={styles.postCard}>
-        {/* Split Left Cover Image */}
-        <View style={styles.cardImageWrapper}>
-          <Image
-            source={{ uri: item.imageUrl || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=300' }}
-            style={styles.cardImage}
-          />
-        </View>
-
-        {/* Split Right Content */}
-        <View style={styles.cardContent}>
-          {/* Author Block */}
-          <View style={styles.authorRow}>
-            <View style={styles.authorMeta}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarInitial}>{item.author?.name?.charAt(0) || 'U'}</Text>
-              </View>
-              <View style={styles.authorNameWrapper}>
-                <Text style={styles.authorName} numberOfLines={1}>{item.author?.name || 'Thành viên'}</Text>
-                <Text style={styles.postDate}>{getTimeAgo(item.createdAt)}</Text>
-              </View>
+        {/* Author Block */}
+        <View style={styles.authorRow}>
+          <View style={styles.authorMeta}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitial}>{item.author?.name?.charAt(0) || 'U'}</Text>
             </View>
-            <View style={styles.cardCategoryBadge}>
-              <Text style={styles.cardCategoryText}>{item.category || 'Kinh nghiệm'}</Text>
+            <View style={styles.authorNameWrapper}>
+              <Text style={styles.authorName} numberOfLines={1}>{item.author?.name || 'Thành viên'}</Text>
+              <Text style={styles.postDate}>{getTimeAgo(item.createdAt)}</Text>
             </View>
           </View>
+          <View style={styles.cardCategoryBadge}>
+            <Text style={styles.cardCategoryText}>{item.category || 'Kinh nghiệm'}</Text>
+          </View>
+        </View>
 
-          {/* Title & Excerpt */}
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.cardExcerpt} numberOfLines={3}>{item.excerpt || item.content}</Text>
-          
+        {/* Title */}
+        <Text style={styles.cardTitle}>{item.title}</Text>
+
+        {/* Full Width Cover Image */}
+        {!!item.imageUrl && (
+          <View style={styles.cardImageWrapper}>
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={styles.cardImage}
+            />
+          </View>
+        )}
+
+        {/* Content Section */}
+        <View style={styles.cardContent}>
+          {isExpanded ? (
+            <View style={styles.fullContentContainer}>
+              {(item.content || item.excerpt || '').split('\n').map((paragraph, index) => {
+                if (!paragraph.trim()) return null;
+                return (
+                  <Text key={index} style={styles.paragraph}>
+                    {paragraph}
+                  </Text>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={styles.cardExcerpt} numberOfLines={3}>
+              {item.excerpt || item.content}
+            </Text>
+          )}
+
+          {/* Expand/Collapse Toggle Button */}
+          <TouchableOpacity
+            style={styles.toggleExpandBtn}
+            onPress={() => toggleExpand(item._id)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.toggleExpandText}>
+              {isExpanded ? 'Thu gọn chi tiết' : 'Xem thêm chi tiết bài viết'}
+            </Text>
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={COLORS.primary}
+              style={{ marginLeft: 4 }}
+            />
+          </TouchableOpacity>
+
           <View style={styles.divider} />
 
           {/* Moderation Controls */}
@@ -349,22 +396,82 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
   },
   postCard: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.gray[100],
+    borderColor: COLORS.gray[200],
     marginBottom: SPACING.md,
-    elevation: 2,
+    padding: SPACING.md,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  authorMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  authorNameWrapper: {
+    flex: 1,
+  },
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  authorName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  postDate: {
+    fontSize: 10,
+    color: COLORS.gray[400],
+    marginTop: 2,
+  },
+  cardCategoryBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+  },
+  cardCategoryText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.gray[600],
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.black,
+    lineHeight: 20,
+    marginBottom: SPACING.sm,
   },
   cardImageWrapper: {
-    width: 110,
+    width: '100%',
+    height: 200,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
     backgroundColor: COLORS.gray[100],
+    marginBottom: SPACING.sm,
   },
   cardImage: {
     width: '100%',
@@ -373,89 +480,52 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    padding: 12,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  authorMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-  },
-  authorNameWrapper: {
-    flex: 1,
-  },
-  avatarCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitial: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  authorName: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.black,
-  },
-  postDate: {
-    fontSize: 9,
-    color: COLORS.gray[400],
-    marginTop: 1,
-  },
-  cardCategoryBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  cardCategoryText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.gray[600],
-  },
-  cardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.black,
-    lineHeight: 18,
-    marginBottom: 4,
   },
   cardExcerpt: {
-    fontSize: 11,
-    color: COLORS.gray[500],
-    lineHeight: 15,
-    marginBottom: 10,
+    fontSize: 12,
+    color: COLORS.gray[600],
+    lineHeight: 18,
+    marginBottom: SPACING.xs,
+  },
+  fullContentContainer: {
+    marginBottom: SPACING.xs,
+  },
+  paragraph: {
+    fontSize: 12,
+    color: COLORS.gray[600],
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  toggleExpandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    marginBottom: SPACING.sm,
+  },
+  toggleExpandText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.gray[100],
-    marginBottom: 10,
+    backgroundColor: COLORS.gray[200],
+    marginBottom: SPACING.sm,
   },
   cardActionsContainer: {
     width: '100%',
   },
   cardActionsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: SPACING.sm,
   },
   actionBtn: {
-    paddingVertical: 7,
-    borderRadius: RADIUS.sm,
+    paddingVertical: 9,
+    borderRadius: RADIUS.md,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   approveBtn: {
     flex: 1,
@@ -472,22 +542,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: COLORS.white,
-    marginTop: 6,
+    marginTop: 8,
   },
   approveBtnText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.white,
   },
   rejectBtnText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.error,
   },
   editBtnText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.gray[650] || '#475569',
+    color: COLORS.gray[600],
   },
   emptyText: {
     fontSize: 13,
