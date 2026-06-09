@@ -1,17 +1,56 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
 const ItineraryCache = require('../models/ItineraryCache');
+const ItineraryTemplate = require('../models/ItineraryTemplate');
 const memoryCache = new Map();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const normalizeText = (value) =>
+  String(value || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+const normalizeBudget = (budget) => {
+  const value = Number(budget || 0);
+  if (!value) return 0;
+
+  // Gom ngân sách theo block 500k để cache dễ trúng hơn.
+  return Math.round(value / 500000) * 500000;
+};
+
+const normalizePreferences = (preferences = []) => {
+  if (!Array.isArray(preferences)) return [];
+
+  return preferences
+    .map(normalizeText)
+    .filter(Boolean)
+    .sort();
+};
+
+const normalizeOptions = (options = {}) => ({
+  startDate: options.startDate || '',
+  people: Number(options.people || 1),
+  travelStyle: normalizeText(options.travelStyle || ''),
+  interests: normalizeText(options.interests || ''),
+  hotelArea: normalizeText(options.hotelArea || ''),
+});
+
+const getPreferredTravelStyles = (options = {}) => {
+  const rawStyle = String(options.travelStyle || '').toUpperCase();
+  const rawInterests = String(options.interests || '').toUpperCase();
+  const raw = `${rawStyle},${rawInterests}`;
+  const knownStyles = ['FOOD', 'BEACH', 'CULTURE', 'NATURE', 'ADVENTURE', 'CHILL', 'FAMILY', 'LUXURY', 'BUDGET'];
+  const matchedStyles = knownStyles.filter((style) => raw.includes(style));
+
+  return [...new Set([...matchedStyles, 'GENERAL'])];
+};
+
 const createCacheKey = (destination, durationDays, budget, preferences, options) => {
   const raw = JSON.stringify({
-    destination: String(destination || '').toLowerCase().trim(),
-    durationDays,
-    budget,
-    preferences,
-    options,
+    destination: normalizeText(destination),
+    durationDays: Number(durationDays),
+    budget: normalizeBudget(budget),
+    preferences: normalizePreferences(preferences),
+    options: normalizeOptions(options),
   });
 
   return crypto.createHash('md5').update(raw).digest('hex');
@@ -62,11 +101,191 @@ const calculateBudgetBreakdown = (aiResult, budget, durationDays) => {
   };
 };
 
+const cloneJson = (value) => JSON.parse(JSON.stringify(value));
+
+const roundToNearest = (value, step = 1000) => Math.max(0, Math.round(value / step) * step);
+
+const getBudgetPlan = (budget, durationDays) => {
+  const totalBudget = Number(budget || 0);
+  const days = Math.max(Number(durationDays || 1), 1);
+
+  if (!totalBudget) {
+    return null;
+  }
+
+  return {
+    accommodation: Math.round(totalBudget * 0.35),
+    foodAndBeverage: Math.round(totalBudget * 0.3),
+    activitiesAndEntranceFees: Math.round(totalBudget * 0.25),
+    transportation: Math.round(totalBudget * 0.05),
+    unforeseenExpenses: Math.round(totalBudget * 0.05),
+    days,
+  };
+};
+
+const fitResultToBudget = (result, budget, durationDays) => {
+  const plan = getBudgetPlan(budget, durationDays);
+
+  if (!plan) {
+    return result;
+  }
+
+  const fitted = cloneJson(result);
+  const itinerary = Array.isArray(fitted.itinerary) ? fitted.itinerary : [];
+  const activities = itinerary.flatMap((dayItem) => dayItem.activities || []);
+
+  const scaleCategoryCosts = (categories, targetBudget) => {
+    const matchedActivities = activities.filter((activity) =>
+      categories.includes((activity.category || 'OTHER').toUpperCase())
+    );
+
+    const currentTotal = matchedActivities.reduce(
+      (sum, activity) => sum + Number(activity.cost || 0),
+      0
+    );
+
+    if (!matchedActivities.length || !currentTotal) {
+      return;
+    }
+
+    const ratio = Math.min(targetBudget / currentTotal, 1);
+
+    matchedActivities.forEach((activity) => {
+      activity.cost = roundToNearest(Number(activity.cost || 0) * ratio);
+    });
+  };
+
+  const accommodationPerNight = Math.floor(plan.accommodation / plan.days);
+  if (fitted.hotelRecommendation) {
+    fitted.hotelRecommendation.estimatedCostPerNight = roundToNearest(accommodationPerNight, 10000);
+    fitted.hotelRecommendation.description =
+      `${fitted.hotelRecommendation.description || 'Khách sạn phù hợp lịch trình.'} Mức giá đã cân theo ngân sách.`;
+  }
+
+  scaleCategoryCosts(['FOOD'], plan.foodAndBeverage);
+  scaleCategoryCosts(['PLACE', 'REST', 'SHOPPING', 'OTHER'], plan.activitiesAndEntranceFees);
+  scaleCategoryCosts(['TRANSPORT'], plan.transportation);
+
+  if (Array.isArray(fitted.restaurantRecommendations) && fitted.restaurantRecommendations.length) {
+    const mealBudget = Math.floor(plan.foodAndBeverage / Math.max(plan.days * 2, 1));
+    fitted.restaurantRecommendations = fitted.restaurantRecommendations.map((restaurant) => ({
+      ...restaurant,
+      averagePricePerPerson: roundToNearest(
+        Math.min(Number(restaurant.averagePricePerPerson || mealBudget), mealBudget),
+        10000
+      ),
+      description: `${restaurant.description || 'Phù hợp lịch trình.'} Ưu tiên mức giá vừa ngân sách.`,
+    }));
+  }
+
+  fitted.budgetBreakdown = calculateBudgetBreakdown(fitted, budget, durationDays);
+
+  return fitted;
+};
+
+const mergeRestaurantRecommendations = (templates) => {
+  const seenNames = new Set();
+
+  return templates
+    .flatMap((template) => template.result?.restaurantRecommendations || [])
+    .filter((restaurant) => {
+      const key = normalizeText(restaurant.name);
+      if (!key || seenNames.has(key)) {
+        return false;
+      }
+
+      seenNames.add(key);
+      return true;
+    })
+    .slice(0, 5);
+};
+
+const composeTemplateDays = (templates, durationDays, startDate) => {
+  const availableDays = templates.flatMap((template) =>
+    (template.result?.itinerary || []).map((day) => ({
+      sourceStyle: template.travelStyleKey,
+      day,
+    }))
+  );
+
+  if (!availableDays.length) {
+    return [];
+  }
+
+  return Array.from({ length: Number(durationDays) }, (_, index) => {
+    const source = availableDays[index % availableDays.length];
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + index);
+
+    return {
+      ...cloneJson(source.day),
+      day: index + 1,
+      date: date.toISOString().split('T')[0],
+      sourceStyle: source.sourceStyle,
+    };
+  });
+};
+
+const findTemplateItinerary = async (
+  destination,
+  durationDays,
+  budget,
+  preferences = [],
+  options = {}
+) => {
+  const destinationNorm = normalizeText(destination);
+  const preferredStyles = getPreferredTravelStyles(options);
+
+  const templates = await ItineraryTemplate.find({
+    aliases: destinationNorm,
+  }).lean();
+
+  const matchedTemplates = preferredStyles
+    .map((style) => templates.find((item) => item.travelStyleKey === style))
+    .filter(Boolean);
+
+  const selectedTemplates = matchedTemplates.length ? matchedTemplates : templates.slice(0, 1);
+
+  if (!selectedTemplates.length) {
+    return null;
+  }
+
+  console.log(
+    `Using DB itinerary template for "${destination}" (${selectedTemplates
+      .map((template) => template.travelStyleKey)
+      .join('+')}).`
+  );
+
+  const startDate = options.startDate || new Date().toISOString().split('T')[0];
+  const people = Number(options.people || 1);
+  const travelStyle = options.travelStyle || preferences.join(', ') || 'tu tuc';
+  const interests = options.interests || preferences.join(', ') || 'tham quan';
+  const hotelArea = options.hotelArea || 'Trung tam';
+
+  const primaryTemplate = selectedTemplates[0];
+  const result = cloneJson(primaryTemplate.result);
+
+  result.restaurantRecommendations = mergeRestaurantRecommendations(selectedTemplates);
+  result.itinerary = composeTemplateDays(selectedTemplates, durationDays, startDate);
+
+  result.destination = destination;
+  result.startDate = startDate;
+  result.days = Number(durationDays);
+  result.people = people;
+  result.budget = Number(budget || 0);
+  result.travelStyle = travelStyle;
+  result.interests = interests;
+  result.hotelArea = hotelArea;
+  result.aiProvider = 'database-template';
+  result.templateStyles = selectedTemplates.map((template) => template.travelStyleKey);
+
+  return fitResultToBudget(result, budget, durationDays);
+};
+
 const buildPrompt = ({
   destination,
   durationDays,
   budget,
-  preferences,
   startDate,
   people,
   travelStyle,
@@ -74,42 +293,37 @@ const buildPrompt = ({
   hotelArea,
 }) => {
   return `
-Bạn là AI tạo lịch trình du lịch cho app TravelMate.
+Return ONLY valid JSON. No markdown. No explanation.
 
-Chỉ trả về JSON hợp lệ.
-Không markdown.
-Không giải thích thêm.
+Create a practical Vietnam travel itinerary.
 
-Thông tin chuyến đi:
-- destination: ${destination}
-- startDate: ${startDate}
-- durationDays: ${durationDays}
-- people: ${people}
-- budget: ${budget} VND
-- travelStyle: ${travelStyle}
-- interests: ${interests}
-- hotelArea: ${hotelArea}
+Output language:
+- JSON keys must stay exactly in English.
+- All user-facing text values must be in Vietnamese.
+- Place names should use Vietnamese names when available.
 
-Yêu cầu:
-- Tạo lịch trình đúng ${durationDays} ngày.
-- Mỗi ngày 3 đến 5 hoạt động.
-- Hoạt động thực tế, không quá dày.
-- Các địa điểm trong cùng ngày nên gần nhau.
-- Chi phí từng hoạt động là số VND.
-- Gợi ý 1 khách sạn phù hợp ngân sách.
-- Gợi ý ít nhất 3 quán ăn địa phương.
-- Tổng chi phí hoạt động + khách sạn không vượt ngân sách.
+Input:
+destination=${destination}
+startDate=${startDate}
+days=${durationDays}
+people=${people}
+budgetVND=${budget}
+style=${travelStyle}
+interests=${interests}
+hotelArea=${hotelArea}
 
-JSON schema bắt buộc:
+Rules:
+- Exactly ${durationDays} days.
+- 3 activities per day.
+- Keep places in the same day geographically close.
+- Costs are numbers in VND.
+- Total estimated cost should fit the budget.
+- Use these categories only: FOOD, PLACE, HOTEL, TRANSPORT, REST, SHOPPING, OTHER.
+- Use these transports only: WALKING, BIKE, MOTORBIKE, CAR, BUS, TAXI, GRAB, OTHER.
+- Keep descriptions short, max 20 words.
+
+JSON shape:
 {
-  "destination": "",
-  "startDate": "",
-  "days": 0,
-  "people": 0,
-  "budget": 0,
-  "travelStyle": "",
-  "interests": "",
-  "hotelArea": "",
   "hotelRecommendation": {
     "name": "",
     "address": "",
@@ -137,7 +351,7 @@ JSON schema bắt buộc:
           "location": "",
           "description": "",
           "cost": 0,
-          "category": "FOOD",
+          "category": "PLACE",
           "transport": "GRAB",
           "durationMinutes": 60
         }
@@ -145,12 +359,6 @@ JSON schema bắt buộc:
     }
   ]
 }
-
-category chỉ được chọn:
-FOOD, PLACE, HOTEL, TRANSPORT, REST, SHOPPING, OTHER
-
-transport chỉ được chọn:
-WALKING, BIKE, MOTORBIKE, CAR, BUS, TAXI, GRAB, OTHER
 `;
 };
 
@@ -171,7 +379,20 @@ const generateItinerary = async (
     throw new Error('Free AI plan only supports maximum 5 days per itinerary');
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const templateResult = await findTemplateItinerary(
+    destination,
+    durationDays,
+    budget,
+    preferences,
+    options
+  );
+
+  if (templateResult) {
+    return templateResult;
+  }
+
+  const useGemini = process.env.USE_GEMINI === 'true';
+  const apiKey = useGemini ? process.env.GEMINI_API_KEY : null;
 
   if (!apiKey) {
     console.warn('Missing GEMINI_API_KEY. Using mock itinerary.');
@@ -210,12 +431,12 @@ const generateItinerary = async (
   const genAI = new GoogleGenerativeAI(apiKey);
 
   const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite',
 
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.3,
-      maxOutputTokens: 3000,
+      temperature: 0.2,
+      maxOutputTokens: 1800,
     },
   });
 
@@ -231,7 +452,7 @@ const generateItinerary = async (
     hotelArea,
   });
 
-  const maxRetries = 2;
+  const maxRetries = 1;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -291,10 +512,24 @@ const generateItinerary = async (
 
       console.error('Gemini generation error:', message);
 
-      const isRetryable =
+      const isQuotaError =
         status === 429 ||
-        status === 503 ||
         message.includes('Too Many Requests') ||
+        message.includes('quota');
+
+      if (isQuotaError) {
+        console.warn('Gemini quota/rate limit reached. Returning mock itinerary without retry.');
+        return generateMockItinerary(
+          destination,
+          durationDays,
+          budget,
+          preferences,
+          options
+        );
+      }
+
+      const isRetryable =
+        status === 503 ||
         message.includes('high demand') ||
         message.includes('Service Unavailable');
 
@@ -441,7 +676,7 @@ const generateMockItinerary = (
     durationDays
   );
 
-  return result;
+  return fitResultToBudget(result, budget, durationDays);
 };
 
 module.exports = {

@@ -2,9 +2,40 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const AdminSetting = require('../models/AdminSetting');
 const Trip = require('../models/Trip');
+const ItineraryTemplate = require('../models/ItineraryTemplate');
+const itineraryTemplates = require('../data/itineraryTemplates');
+
+const seedItineraryTemplates = async () => {
+  if (!itineraryTemplates.length) {
+    return;
+  }
+
+  const activeKeys = itineraryTemplates.map((template) => template.destinationKey);
+
+  await ItineraryTemplate.deleteMany({
+    destinationKey: { $nin: activeKeys },
+  });
+
+  await ItineraryTemplate.bulkWrite(
+    itineraryTemplates.map((template) => ({
+      updateOne: {
+        filter: {
+          destinationKey: template.destinationKey,
+          travelStyleKey: template.travelStyleKey || 'GENERAL',
+        },
+        update: { $set: template },
+        upsert: true,
+      },
+    }))
+  );
+
+  console.log(`Itinerary templates upserted: ${itineraryTemplates.length}`);
+};
 
 const seedAdminData = async () => {
   try {
+    await seedItineraryTemplates();
+
     // Check if admin already exists
     const adminExists = await User.findOne({ email: 'admin@travelmate.com' });
     if (adminExists) {
