@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,20 +12,85 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import CustomInput from '../../components/common/CustomInput';
 import CustomButton from '../../components/common/CustomButton';
 import useAuth from '../../hooks/useAuth';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 
+
+// Cho phép Expo đóng WebBrowser sau khi OAuth xong
+WebBrowser.maybeCompleteAuthSession();
+
+// Google OAuth discovery endpoints
+const GOOGLE_DISCOVERY = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+};
+
 const { height } = Dimensions.get('window');
 
 const LoginScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { login, isLoading } = useAuth();
+  const { login, loginWithGoogle, isLoading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+
+
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    scopes: ['openid', 'profile', 'email'],
+  });
+
+  console.log("CLIENT_ID:", process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+  console.log("REQUEST_READY:", !!request);
+  // Lắng nghe kết quả OAuth trả về
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const accessToken = response.params?.access_token;
+      if (accessToken) {
+        handleGoogleToken(accessToken);
+      }
+    } else if (response?.type === 'error') {
+      Alert.alert('Lỗi', 'Xác thực Google thất bại. Vui lòng thử lại.');
+    }
+  }, [response]);
+
+  // Lấy thông tin user từ Google API rồi gửi lên backend
+  const handleGoogleToken = async (accessToken) => {
+    setGoogleLoading(true);
+    try {
+      const res = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const userInfo = await res.json();
+
+      const result = await loginWithGoogle({
+        googleId: userInfo.id,
+        email: userInfo.email,
+        name: userInfo.name,
+        avatar: userInfo.picture,
+      });
+
+      if (!result.success) {
+        Alert.alert('Lỗi', result.message || 'Đăng nhập Google thất bại');
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Không thể lấy thông tin tài khoản Google');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -123,9 +188,20 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         {/* Google button */}
-        <TouchableOpacity style={styles.googleBtn} activeOpacity={0.85}>
-          <Ionicons name="logo-google" size={18} color="#EA4335" />
-          <Text style={styles.googleText}>Google</Text>
+        <TouchableOpacity
+          style={[styles.googleBtn, (googleLoading || isLoading) && { opacity: 0.6 }]}
+          activeOpacity={0.85}
+          onPress={() => promptAsync()}
+          disabled={!request || isLoading || googleLoading}
+        >
+          {googleLoading ? (
+            <Text style={styles.googleText}>Đang xác thực...</Text>
+          ) : (
+            <>
+              <Ionicons name="logo-google" size={18} color="#EA4335" />
+              <Text style={styles.googleText}>Google</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* Register link */}

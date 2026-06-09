@@ -65,6 +65,27 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
+  // Google OAuth login action
+  loginWithGoogle: async ({ googleId, email, name, avatar }) => {
+    set({ isLoading: true, error: null });
+    try {
+      const result = await authApi.googleLogin({ googleId, email, name, avatar });
+      if (result.success) {
+        const { token, ...user } = result.data;
+        await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, token);
+        await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+        set({ user, token, isLoading: false });
+        return { success: true };
+      }
+      set({ isLoading: false, error: result.message });
+      return { success: false, message: result.message };
+    } catch (error) {
+      const message = error.response?.data?.message || 'Đăng nhập Google thất bại';
+      set({ isLoading: false, error: message });
+      return { success: false, message };
+    }
+  },
+
   // Logout action
   logout: async () => {
     await AsyncStorage.removeItem(STORAGE_KEYS.TOKEN);

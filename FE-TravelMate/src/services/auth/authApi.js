@@ -19,6 +19,15 @@ export const login = async ({ email, password }) => {
 };
 
 /**
+ * Login or register via Google OAuth
+ * POST /api/auth/google
+ */
+export const googleLogin = async ({ googleId, email, name, avatar }) => {
+  const response = await api.post('/auth/google', { googleId, email, name, avatar });
+  return response.data;
+};
+
+/**
  * Get authenticated user's profile
  * GET /api/auth/profile
  */

@@ -14,6 +14,7 @@ const useAuth = () => {
   const logout = useAuthStore((s) => s.logout);
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const clearError = useAuthStore((s) => s.clearError);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
 
   const isAuthenticated = !!token;
 
@@ -29,7 +30,9 @@ const useAuth = () => {
     logout,
     refreshProfile,
     clearError,
+    loginWithGoogle,
   };
 };
 
 export default useAuth;
+

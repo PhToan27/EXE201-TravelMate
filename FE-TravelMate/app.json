@@ -1,7 +1,9 @@
 {
   "expo": {
+    "owner": "toanpromax123",
     "name": "TravelMate",
     "slug": "travelmate",
+    "scheme": "travelmate",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -24,7 +26,13 @@
     },
     "web": {},
     "plugins": [
-      "expo-font"
-    ]
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c7f61af0-7d40-43bb-8a40-79fbf0c693b0"
+      }
+    }
   }
 }
