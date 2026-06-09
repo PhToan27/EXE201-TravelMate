@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 
 // Helper to generate JWT
@@ -115,8 +116,61 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Login or register via Google OAuth
+ * @route   POST /api/auth/google
+ * @access  Public
+ */
+const googleLogin = async (req, res) => {
+  try {
+    const { googleId, email, name, avatar } = req.body;
+
+    if (!googleId || !email) {
+      return res.status(400).json({ success: false, message: 'Missing Google credentials' });
+    }
+
+    // Tìm user theo googleId hoặc email
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      // Nếu user đã tồn tại nhưng chưa liên kết googleId (đăng ký bằng email trước)
+      if (!user.googleId) {
+        user.googleId = googleId;
+        if (avatar && !user.avatar) user.avatar = avatar;
+        await user.save();
+      }
+    } else {
+      // Tạo user mới từ Google
+      user = await User.create({
+        name,
+        email,
+        googleId,
+        avatar: avatar || '',
+        password: crypto.randomBytes(32).toString('hex'), // Random password — not used
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role || 'user',
+        package: user.package || 'free',
+        status: user.status || 'active',
+        token: generateToken(user._id),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
+  googleLogin,
 };
