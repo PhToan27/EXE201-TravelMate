@@ -2,7 +2,7 @@
 // Chọn URL phù hợp với môi trường chạy Expo của bạn:
 // 1. Dành cho Android Emulator:
 
-export const API_BASE_URL = 'http://172.20.10.2:5000/api';
+export const API_BASE_URL = 'http://172.20.10.8:5000/api';
 
 
 // 2. Dành cho iOS Simulator hoặc Web:
