@@ -28,13 +28,6 @@ const getTimePeriod = (timeStr) => {
   return 'BUỔI TỐI';
 };
 
-const getVietMapVehicle = (transport) => {
-  if (transport === 'WALKING') return 'foot';
-  if (transport === 'BIKE') return 'bike';
-  if (['CAR', 'TAXI', 'GRAB', 'BUS'].includes(transport)) return 'car';
-  return 'motorcycle';
-};
-
 const ActivityCard = ({ activity, isLast = false }) => {
   const navigation = useNavigation();
   const cat = ACTIVITY_CATEGORIES[activity.category] || ACTIVITY_CATEGORIES.OTHER;
@@ -62,12 +55,8 @@ const ActivityCard = ({ activity, isLast = false }) => {
           style={styles.card}
           activeOpacity={0.7}
           onPress={() => {
-            if (activity._id && activity.location && activity.location !== 'N/A') {
-              navigation.navigate('NavigationDetail', {
-                placeId: activity._id,
-                placeName: activity.location,
-                vehicle: getVietMapVehicle(activity.transport),
-              });
+            if (activity.location && activity.location !== 'N/A') {
+              navigation.navigate('PlaceDetail', { placeName: activity.location });
             }
           }}
         >
