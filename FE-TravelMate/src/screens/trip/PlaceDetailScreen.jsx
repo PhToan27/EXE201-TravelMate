@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
   Share,
-  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,6 +61,19 @@ const PlaceDetailScreen = ({ route, navigation }) => {
 
   const handleOpenMap = () => {
     if (!place) return;
+    if (!place._id) {
+      Alert.alert('Loi', 'Khong the lay ma dia diem de xem duong di.');
+      return;
+    }
+
+    navigation.navigate('NavigationDetail', {
+      placeId: place._id,
+      placeName: place.name || placeName,
+      vehicle: 'motorcycle',
+    });
+    return;
+    /*
+
     const { lat, lng } = place.coordinates || {};
     const address = place.address || placeName;
     
@@ -79,6 +91,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
         }
       })
       .catch((err) => console.error('An error occurred', err));
+    */
   };
 
   if (loading) {
@@ -204,7 +217,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
               onPress={handleOpenMap}
             >
               <Ionicons name="map-outline" size={20} color={COLORS.primary} />
-              <Text style={styles.secondaryBtnText}>Xem trên bản đồ</Text>
+              <Text style={styles.secondaryBtnText}>Xem đường đi</Text>
             </TouchableOpacity>
           </View>
         </View>

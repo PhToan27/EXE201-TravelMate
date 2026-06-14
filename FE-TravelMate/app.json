@@ -27,7 +27,14 @@
     "web": {},
     "plugins": [
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TravelMate can use your location to show directions to itinerary places."
+        }
+      ]
     ],
     "extra": {
       "eas": {
