@@ -16,6 +16,7 @@ import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 import { getNavigationToPlace } from '../../services/navigation/navigationApi';
 
 const DEFAULT_VEHICLE = 'motorcycle';
+const LOCATION_TIMEOUT_MS = 12000;
 
 const decodePolyline = (encoded = '') => {
   const coordinates = [];
@@ -65,6 +66,14 @@ const formatTraffic = (trafficLevel) => {
   return 'Chua co du lieu giao thong';
 };
 
+const withTimeout = (promise, timeoutMs, message) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+
 const NavigationDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
@@ -86,9 +95,22 @@ const NavigationDetailScreen = ({ route, navigation }) => {
           return;
         }
 
-        const current = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+        let current;
+        try {
+          current = await withTimeout(
+            Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            }),
+            LOCATION_TIMEOUT_MS,
+            'Khong the lay vi tri hien tai. Hay kiem tra GPS va thu lai.'
+          );
+        } catch (locationError) {
+          const lastKnown = await Location.getLastKnownPositionAsync();
+          if (!lastKnown) {
+            throw locationError;
+          }
+          current = lastKnown;
+        }
 
         const currentOrigin = {
           latitude: current.coords.latitude,
@@ -100,6 +122,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
           fromLat: currentOrigin.latitude,
           fromLng: currentOrigin.longitude,
           vehicle,
+          placeName,
         });
 
         if (!response.success) {
@@ -109,8 +132,16 @@ const NavigationDetailScreen = ({ route, navigation }) => {
 
         setRouteData(response.data);
       } catch (error) {
+        console.log('Navigation API error:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          params: error.config?.params,
+        });
         const message =
           error.response?.data?.message ||
+          (error.response?.status ? `Loi API ${error.response.status}` : '') ||
           error.message ||
           'Khong the lay du lieu dan duong.';
         setErrorMessage(message);
