@@ -31,6 +31,7 @@ const getNearestSheetHeight = (height) =>
   SHEET_SNAP_POINTS.reduce((nearest, point) =>
     Math.abs(point - height) < Math.abs(nearest - height) ? point : nearest
   );
+const LOCATION_TIMEOUT_MS = 12000;
 
 const decodePolyline = (encoded = '') => {
   const coordinates = [];
@@ -315,6 +316,14 @@ const buildLocalRoute = (place, originPoint, vehicle, reason = '') => {
   };
 };
 
+const withTimeout = (promise, timeoutMs, message) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+
 const NavigationDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
@@ -385,6 +394,27 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         }
 
         fallbackOrigin = currentOrigin;
+        let current;
+        try {
+          current = await withTimeout(
+            Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            }),
+            LOCATION_TIMEOUT_MS,
+            'Khong the lay vi tri hien tai. Hay kiem tra GPS va thu lai.'
+          );
+        } catch (locationError) {
+          const lastKnown = await Location.getLastKnownPositionAsync();
+          if (!lastKnown) {
+            throw locationError;
+          }
+          current = lastKnown;
+        }
+
+        const currentOrigin = {
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        };
         setOrigin(currentOrigin);
 
         if (!placeId && initialPlace) {
@@ -405,6 +435,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
           fromLat: currentOrigin.latitude,
           fromLng: currentOrigin.longitude,
           vehicle,
+          placeName,
         });
 
         if (!response.success) {
@@ -441,8 +472,16 @@ const NavigationDetailScreen = ({ route, navigation }) => {
 
         setRouteData(response.data);
       } catch (error) {
+        console.log('Navigation API error:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          params: error.config?.params,
+        });
         const message =
           error.response?.data?.message ||
+          (error.response?.status ? `Loi API ${error.response.status}` : '') ||
           error.message ||
           'Khong the lay du lieu dan duong.';
         if (initialPlace) {
