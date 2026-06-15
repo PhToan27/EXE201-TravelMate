@@ -32,6 +32,7 @@ app.use('/api/trips', require('./routes/trip.routes'));
 app.use('/api/map', require('./routes/map.routes'));
 app.use('/api/navigation', require('./routes/navigation.routes'));
 app.use('/api/places', require('./routes/place.routes'));
+app.use('/api/navigation', require('./routes/navigation.routes'));
 app.use('/api/posts', require('./routes/post.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
 
