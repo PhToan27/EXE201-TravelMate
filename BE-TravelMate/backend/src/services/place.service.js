@@ -1,6 +1,40 @@
 const Place = require('../models/Place');
 
 const POPULAR_PLACES = {
+  'bánh tráng cuốn thịt heo trần': {
+    name: 'Bánh tráng cuốn thịt heo Trần',
+    category: 'Ẩm thực',
+    rating: 4.6,
+    reviewsCount: '1k+',
+    duration: '45 phút - 1 giờ',
+    difficulty: 'Dễ',
+    introduction:
+      'Bánh tráng cuốn thịt heo Trần là một địa chỉ đặc sản Đà Nẵng nổi tiếng, phù hợp để thưởng thức món bánh tráng cuốn thịt heo trong lịch trình ẩm thực.',
+    address: '4 Lê Duẩn, Hải Châu, Đà Nẵng',
+    openHours: '09:00 - 21:00 (Tham khảo)',
+    ticketPrice: 'Khoảng 70.000 - 165.000 VNĐ / người',
+    imageUrl:
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+    coordinates: { lat: 16.071657, lng: 108.222615 },
+  },
+
+  'mì quảng bà mua': {
+    name: 'Mì Quảng Bà Mua',
+    category: 'Ẩm thực',
+    rating: 4.5,
+    reviewsCount: '100+',
+    duration: '45 phút - 1 giờ',
+    difficulty: 'Dễ',
+    introduction:
+      'Mì Quảng Bà Mua là một quán mì Quảng quen thuộc ở Đà Nẵng, phù hợp để ghé ăn đặc sản địa phương trong lịch trình tham quan thành phố.',
+    address: '95A Nguyễn Tri Phương, Thanh Khê, Đà Nẵng',
+    openHours: '06:00 - 22:00 (Tham khảo)',
+    ticketPrice: 'Khoảng 30.000 - 70.000 VNĐ / tô',
+    imageUrl:
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+    coordinates: { lat: 16.0678, lng: 108.2039 },
+  },
+
   'ngũ hành sơn': {
     name: 'Ngũ Hành Sơn',
     category: 'Di tích quốc gia',
@@ -175,7 +209,8 @@ const savePlaceSafely = async (placeData) => {
     });
 
     if (existingPlace) {
-      return existingPlace;
+      Object.assign(existingPlace, placeData);
+      return await existingPlace.save();
     }
 
     return await Place.create(placeData);
@@ -192,6 +227,13 @@ const getPlaceDetails = async (placeName) => {
 
   const cleanName = String(placeName).trim();
 
+  const popularPlace = findPopularPlace(cleanName);
+
+  if (popularPlace) {
+    console.log(`Retrieved place "${cleanName}" from static dictionary.`);
+    return await savePlaceSafely(popularPlace);
+  }
+
   const cachedPlace = await Place.findOne({
     name: {
       $regex: new RegExp(`^${escapeRegex(cleanName)}$`, 'i'),
@@ -201,13 +243,6 @@ const getPlaceDetails = async (placeName) => {
   if (cachedPlace) {
     console.log(`Retrieved place "${cleanName}" from MongoDB cache.`);
     return cachedPlace;
-  }
-
-  const popularPlace = findPopularPlace(cleanName);
-
-  if (popularPlace) {
-    console.log(`Retrieved place "${cleanName}" from static dictionary.`);
-    return await savePlaceSafely(popularPlace);
   }
 
   console.log(`Using fallback place template for "${cleanName}".`);
