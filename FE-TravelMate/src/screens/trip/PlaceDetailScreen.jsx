@@ -69,6 +69,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     navigation.navigate('NavigationDetail', {
       placeId: place._id,
       placeName: place.name || placeName,
+      place,
       vehicle: 'motorcycle',
     });
     return;
