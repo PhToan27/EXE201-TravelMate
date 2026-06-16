@@ -1,126 +1,31 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const crypto = require('crypto');
-const ItineraryCache = require('../models/ItineraryCache');
-const ItineraryTemplate = require('../models/ItineraryTemplate');
 const Place = require('../models/Place');
-const memoryCache = new Map();
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeText = (value) =>
-  String(value || '').toLowerCase().trim().replace(/\s+/g, ' ');
-
-const normalizeForMatch = (value) =>
   String(value || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
+    .replace(/Ä‘/g, 'd')
     .trim()
     .replace(/\s+/g, ' ');
 
-const normalizeBudget = (budget) => {
-  const value = Number(budget || 0);
-  if (!value) return 0;
-
-  // Gom ngân sách theo block 500k để cache dễ trúng hơn.
-  return Math.round(value / 500000) * 500000;
-};
-
-const normalizePreferences = (preferences = []) => {
-  if (!Array.isArray(preferences)) return [];
-
-  return preferences
-    .map(normalizeText)
-    .filter(Boolean)
-    .sort();
-};
-
-const normalizeOptions = (options = {}) => ({
-  startDate: options.startDate || '',
-  people: Number(options.people || 1),
-  travelStyle: normalizeText(options.travelStyle || ''),
-  interests: normalizeText(options.interests || ''),
-  hotelArea: normalizeText(options.hotelArea || ''),
-});
-
-const getPreferredTravelStyles = (options = {}) => {
-  const rawStyle = String(options.travelStyle || '').toUpperCase();
-  const rawInterests = String(options.interests || '').toUpperCase();
-  const raw = `${rawStyle},${rawInterests}`;
-  const knownStyles = ['FOOD', 'BEACH', 'CULTURE', 'NATURE', 'ADVENTURE', 'CHILL', 'FAMILY', 'LUXURY', 'BUDGET'];
-  const matchedStyles = knownStyles.filter((style) => raw.includes(style));
-
-  return [...new Set([...matchedStyles, 'GENERAL'])];
-};
-
-const createCacheKey = (destination, durationDays, budget, preferences, options) => {
-  const raw = JSON.stringify({
-    destination: normalizeText(destination),
-    durationDays: Number(durationDays),
-    budget: normalizeBudget(budget),
-    preferences: normalizePreferences(preferences),
-    options: normalizeOptions(options),
-  });
-
-  return crypto.createHash('md5').update(raw).digest('hex');
-};
-
-const safeJsonParse = (text) => {
-  const cleanText = text
-    .replace(/```json/g, '')
-    .replace(/```/g, '')
-    .trim();
-
-  return JSON.parse(cleanText);
-};
-
-const calculateBudgetBreakdown = (aiResult, budget, durationDays) => {
-  const itinerary = aiResult.itinerary || [];
-  const activities = itinerary.flatMap((day) => day.activities || []);
-
-  const sumByCategory = (categories) =>
-    activities
-      .filter((activity) => categories.includes(activity.category))
-      .reduce((sum, activity) => sum + Number(activity.cost || 0), 0);
-
-  const accommodation =
-    Number(aiResult.hotelRecommendation?.estimatedCostPerNight || 0) * Number(durationDays || 1);
-
-  const foodAndBeverage = sumByCategory(['FOOD']);
-  const transportation = sumByCategory(['TRANSPORT']);
-  const activitiesAndEntranceFees = sumByCategory([
-    'PLACE',
-    'REST',
-    'SHOPPING',
-    'OTHER',
-  ]);
-
-  const used =
-    accommodation +
-    foodAndBeverage +
-    transportation +
-    activitiesAndEntranceFees;
-
-  return {
-    accommodation,
-    foodAndBeverage,
-    activitiesAndEntranceFees,
-    transportation,
-    unforeseenExpenses: Math.max(Number(budget || 0) - used, 0),
-  };
-};
-
-const cloneJson = (value) => JSON.parse(JSON.stringify(value));
-
-const roundToNearest = (value, step = 1000) => Math.max(0, Math.round(value / step) * step);
+const roundToNearest = (value, step = 1000) =>
+  Math.max(0, Math.round(Number(value || 0) / step) * step);
 
 const getBudgetPlan = (budget, durationDays) => {
   const totalBudget = Number(budget || 0);
   const days = Math.max(Number(durationDays || 1), 1);
 
   if (!totalBudget) {
-    return null;
+    return {
+      accommodation: 0,
+      foodAndBeverage: 0,
+      activitiesAndEntranceFees: 0,
+      transportation: 0,
+      unforeseenExpenses: 0,
+      days,
+    };
   }
 
   return {
@@ -133,452 +38,263 @@ const getBudgetPlan = (budget, durationDays) => {
   };
 };
 
-const fitResultToBudget = (result, budget, durationDays) => {
-  const plan = getBudgetPlan(budget, durationDays);
+const calculateBudgetBreakdown = (result, budget, durationDays) => {
+  const activities = (result.itinerary || []).flatMap((day) => day.activities || []);
+  const sumByCategory = (categories) =>
+    activities
+      .filter((activity) => categories.includes((activity.category || '').toUpperCase()))
+      .reduce((sum, activity) => sum + Number(activity.cost || 0), 0);
 
-  if (!plan) {
-    return result;
-  }
+  const accommodation =
+    Number(result.hotelRecommendation?.estimatedCostPerNight || 0) * Number(durationDays || 1);
+  const foodAndBeverage = sumByCategory(['FOOD']);
+  const transportation = sumByCategory(['TRANSPORT']);
+  const activitiesAndEntranceFees = sumByCategory(['PLACE', 'REST', 'SHOPPING', 'OTHER']);
+  const used = accommodation + foodAndBeverage + transportation + activitiesAndEntranceFees;
 
-  const fitted = cloneJson(result);
-  const itinerary = Array.isArray(fitted.itinerary) ? fitted.itinerary : [];
-  const activities = itinerary.flatMap((dayItem) => dayItem.activities || []);
-
-  const scaleCategoryCosts = (categories, targetBudget) => {
-    const matchedActivities = activities.filter((activity) =>
-      categories.includes((activity.category || 'OTHER').toUpperCase())
-    );
-
-    const currentTotal = matchedActivities.reduce(
-      (sum, activity) => sum + Number(activity.cost || 0),
-      0
-    );
-
-    if (!matchedActivities.length || !currentTotal) {
-      return;
-    }
-
-    const ratio = Math.min(targetBudget / currentTotal, 1);
-
-    matchedActivities.forEach((activity) => {
-      activity.cost = roundToNearest(Number(activity.cost || 0) * ratio);
-    });
+  return {
+    accommodation,
+    foodAndBeverage,
+    activitiesAndEntranceFees,
+    transportation,
+    unforeseenExpenses: Math.max(Number(budget || 0) - used, 0),
   };
-
-  const accommodationPerNight = Math.floor(plan.accommodation / plan.days);
-  if (fitted.hotelRecommendation) {
-    fitted.hotelRecommendation.estimatedCostPerNight = roundToNearest(accommodationPerNight, 10000);
-    fitted.hotelRecommendation.description =
-      `${fitted.hotelRecommendation.description || 'Khách sạn phù hợp lịch trình.'} Mức giá đã cân theo ngân sách.`;
-  }
-
-  scaleCategoryCosts(['FOOD'], plan.foodAndBeverage);
-  scaleCategoryCosts(['PLACE', 'REST', 'SHOPPING', 'OTHER'], plan.activitiesAndEntranceFees);
-  scaleCategoryCosts(['TRANSPORT'], plan.transportation);
-
-  if (Array.isArray(fitted.restaurantRecommendations) && fitted.restaurantRecommendations.length) {
-    const mealBudget = Math.floor(plan.foodAndBeverage / Math.max(plan.days * 2, 1));
-    fitted.restaurantRecommendations = fitted.restaurantRecommendations.map((restaurant) => ({
-      ...restaurant,
-      averagePricePerPerson: roundToNearest(
-        Math.min(Number(restaurant.averagePricePerPerson || mealBudget), mealBudget),
-        10000
-      ),
-      description: `${restaurant.description || 'Phù hợp lịch trình.'} Ưu tiên mức giá vừa ngân sách.`,
-    }));
-  }
-
-  fitted.budgetBreakdown = calculateBudgetBreakdown(fitted, budget, durationDays);
-
-  return fitted;
 };
 
 const STYLE_KEYWORDS = {
-  FOOD: ['food', 'am thuc', 'an uong', 'quan', 'nha hang', 'cho', 'hai san', 'mi quang', 'banh trang'],
-  BEACH: ['beach', 'bien', 'dao', 'bai tam', 'my khe', 'pham van dong', 'son tra'],
-  CULTURE: ['culture', 'van hoa', 'chua', 'bao tang', 'di tich', 'pho co', 'cau', 'lang'],
-  NATURE: ['nature', 'thien nhien', 'nui', 'son tra', 'ngu hanh son', 'rung', 'suoi', 'deo'],
-  ADVENTURE: ['adventure', 'kham pha', 'leo nui', 'trekking', 'zipline', 'hang dong'],
-  CHILL: ['chill', 'thu gian', 'cafe', 'bien', 'cong vien', 'ngam canh'],
-  FAMILY: ['family', 'gia dinh', 'tre em', 'cong vien', 'khu vui choi'],
-  BUDGET: ['budget', 'tiet kiem', 'mien phi', 'cho', 'bien', 'cong vien'],
+  FOOD: [
+    'am thuc',
+    'an uong',
+    'mon an',
+    'quan an',
+    'quan com',
+    'quan hai san',
+    'nha hang',
+    'hai san',
+    'cho dem',
+    'mi quang',
+    'banh trang',
+    'bun',
+    'cafe',
+  ],
+  BEACH: ['bien', 'bai tam', 'dao', 'ban dao', 'my khe', 'pham van dong', 'son tra'],
+  CULTURE: ['van hoa', 'chua', 'bao tang', 'di tich', 'pho co', 'cau', 'lang', 'tam linh'],
+  NATURE: ['thien nhien', 'nui', 'rung', 'suoi', 'deo', 'son tra', 'ngu hanh son', 'hoa phu'],
+};
+
+const STYLE_CATEGORY = {
+  FOOD: 'FOOD',
+  BEACH: 'REST',
+  CULTURE: 'PLACE',
+  NATURE: 'PLACE',
 };
 
 const TIME_SLOTS = ['08:00', '10:30', '14:30', '18:00'];
 
-const parsePriceNumber = (value) => {
-  const text = normalizeForMatch(value);
-  if (!text || text.includes('mien phi') || text.includes('free')) return 0;
-
-  const matches = String(value || '').match(/\d[\d.,]*/g);
-  if (!matches?.length) return 0;
-
-  const numbers = matches
-    .map((item) => Number(item.replace(/[.,]/g, '')))
-    .filter(Number.isFinite);
-
-  return numbers.length ? Math.max(...numbers) : 0;
+const getPreferredTravelStyles = (options = {}) => {
+  const raw = normalizeText(`${options.travelStyle || ''} ${options.interests || ''}`).toUpperCase();
+  const styles = ['FOOD', 'BEACH', 'CULTURE', 'NATURE'].filter((style) => raw.includes(style));
+  return styles.length ? styles : ['BEACH'];
 };
 
-const getPlaceCost = (place) => parsePriceNumber(place.ticketPrice);
-
 const getPlaceText = (place) =>
-  normalizeForMatch([
-    place.name,
-    place.category,
-    place.address,
-    place.introduction,
-    place.ticketPrice,
-  ].filter(Boolean).join(' '));
+  normalizeText(
+    [
+      place.name,
+      place.category,
+      place.address,
+      place.introduction,
+      place.ticketPrice,
+      place.openHours,
+    ]
+      .filter(Boolean)
+      .join(' ')
+  );
+
+const parsePriceNumber = (value) => {
+  const text = normalizeText(value);
+  if (!text || text.includes('mien phi') || text.includes('free')) return 0;
+
+  const matches = Array.from(String(value || '').matchAll(/(\d[\d.,]*)\s*(k|nghin|ngan)?/gi));
+  if (!matches.length) return null;
+
+  const numbers = matches
+    .map((match) => {
+      const number = Number(match[1].replace(/[.,]/g, ''));
+      const suffix = normalizeText(match[2] || '');
+      return suffix ? number * 1000 : number;
+    })
+    .filter(Number.isFinite);
+
+  return numbers.length ? Math.max(...numbers) : null;
+};
 
 const getPlaceStyleScore = (place, preferredStyles) => {
   const text = getPlaceText(place);
-  const styles = preferredStyles.filter((style) => style !== 'GENERAL');
-
-  if (!styles.length) return 1;
-
-  return styles.reduce((score, style) => {
-    const keywords = STYLE_KEYWORDS[style] || [];
-    const matchedCount = keywords.filter((keyword) => text.includes(keyword)).length;
+  return preferredStyles.reduce((score, style) => {
+    const matchedCount = (STYLE_KEYWORDS[style] || []).filter((keyword) =>
+      text.includes(keyword)
+    ).length;
     return score + matchedCount * 3;
   }, 0);
 };
 
-const getPlaceCategory = (place, preferredStyles) => {
+const isDestinationMatch = (place, destination) => {
+  const destinationText = normalizeText(destination);
+  if (!destinationText) return true;
+
   const text = getPlaceText(place);
-  if ((STYLE_KEYWORDS.FOOD || []).some((keyword) => text.includes(keyword))) return 'FOOD';
-  if (preferredStyles.includes('FOOD')) return 'FOOD';
-  if (preferredStyles.includes('BEACH') || text.includes('bien')) return 'REST';
-  return 'PLACE';
+  return text.includes(destinationText) || destinationText.includes('da nang');
 };
 
-const getPlaceDescription = (place) => {
-  if (place.introduction) {
-    return String(place.introduction).split('.').filter(Boolean)[0].trim() || place.introduction;
+const getBudgetTargetForPlace = (place, preferredStyles, budgetPlan, durationDays) => {
+  const category = getActivityCategory(place, preferredStyles);
+  const days = Math.max(Number(durationDays || 1), 1);
+  const perDayActivityBudget = Math.floor(
+    Number(budgetPlan.activitiesAndEntranceFees || 0) / days
+  );
+  const perActivityBudget = Math.floor(perDayActivityBudget / 2);
+  const perMealBudget = Math.floor(
+    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * 2, 1)
+  );
+
+  return category === 'FOOD' ? perMealBudget : perActivityBudget || perDayActivityBudget;
+};
+
+const getPlaceTotalCost = (place, people, preferredStyles) => {
+  const rawCostPerPerson = parsePriceNumber(place.ticketPrice);
+  if (rawCostPerPerson === null) return null;
+  if (rawCostPerPerson === 0 && getActivityCategory(place, preferredStyles) === 'FOOD') {
+    return null;
   }
 
-  return `Khám phá ${place.name} theo sở thích chuyến đi.`;
+  return rawCostPerPerson * Math.max(Number(people || 1), 1);
 };
 
-const shuffleWeightedPlaces = (places, preferredStyles) =>
-  [...places]
-    .map((place) => {
-      const ratingScore = Number(place.rating || 4) / 5;
-      const styleScore = getPlaceStyleScore(place, preferredStyles);
-      const randomScore = Math.random() * 4;
+const getPlaceBudgetScore = (place, preferredStyles, budgetPlan, durationDays, people) => {
+  const targetCost = getBudgetTargetForPlace(place, preferredStyles, budgetPlan, durationDays);
+  const totalCost = getPlaceTotalCost(place, people, preferredStyles);
 
-      return {
-        place,
-        score: styleScore + ratingScore + randomScore,
-      };
-    })
+  if (!targetCost || totalCost === null) return 1;
+  if (totalCost === 0) return 2;
+
+  const ratio = totalCost / targetCost;
+  if (ratio <= 0.7) return 2;
+  if (ratio <= 1) return 1.5;
+  if (ratio <= 1.3) return 0.5;
+  return -5;
+};
+
+const isPlaceWithinBudget = (place, preferredStyles, budgetPlan, durationDays, people) => {
+  const targetCost = getBudgetTargetForPlace(place, preferredStyles, budgetPlan, durationDays);
+  const totalCost = getPlaceTotalCost(place, people, preferredStyles);
+
+  if (!targetCost || totalCost === null || totalCost === 0) return true;
+  return totalCost <= targetCost * 1.3;
+};
+
+const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays, people) =>
+  [...places]
+    .map((place) => ({
+      place,
+      score:
+        getPlaceStyleScore(place, preferredStyles) +
+        getPlaceBudgetScore(place, preferredStyles, budgetPlan, durationDays, people) +
+        Number(place.rating || 4) / 5 +
+        Math.random() * 4,
+    }))
     .sort((a, b) => b.score - a.score)
     .map((item) => item.place);
 
-const findPlacesForItinerary = async (destination, preferredStyles, durationDays) => {
-  const destinationText = normalizeForMatch(destination);
-  const places = await Place.find({}).lean();
-
-  const destinationPlaces = places.filter((place) => {
-    const text = getPlaceText(place);
-    return (
-      !destinationText ||
-      text.includes(destinationText) ||
-      destinationText.includes(normalizeForMatch(place.address))
-    );
-  });
-
-  const sourcePlaces = destinationPlaces.length ? destinationPlaces : places;
-  const scoredPlaces = sourcePlaces.filter((place) =>
-    preferredStyles.includes('GENERAL') || getPlaceStyleScore(place, preferredStyles) > 0
+const pickPlaces = async (destination, preferredStyles, count, budgetPlan, durationDays, people) => {
+  const allPlaces = await Place.find({}).lean();
+  const destinationPlaces = allPlaces.filter((place) => isDestinationMatch(place, destination));
+  const sourcePlaces = destinationPlaces.length ? destinationPlaces : allPlaces;
+  const budgetMatches = sourcePlaces.filter((place) =>
+    isPlaceWithinBudget(place, preferredStyles, budgetPlan, durationDays, people)
   );
+  const budgetSource = budgetMatches.length >= Math.min(count, 3) ? budgetMatches : sourcePlaces;
 
-  const minimumNeeded = Math.min(Number(durationDays) * 3, sourcePlaces.length);
-  const matchedPlaces = scoredPlaces.length >= minimumNeeded ? scoredPlaces : sourcePlaces;
+  const styleMatches = budgetSource.filter((place) => getPlaceStyleScore(place, preferredStyles) > 0);
+  const mixedPlaces = styleMatches.length >= Math.min(count, 3) ? styleMatches : budgetSource;
 
-  return shuffleWeightedPlaces(matchedPlaces, preferredStyles);
-};
-
-const generatePlaceBasedItinerary = async (
-  destination,
-  durationDays,
-  budget,
-  preferences = [],
-  options = {}
-) => {
-  const preferredStyles = getPreferredTravelStyles(options);
-  const places = await findPlacesForItinerary(destination, preferredStyles, durationDays);
-  const activitiesPerDay = 3;
-  const neededPlaces = Number(durationDays) * activitiesPerDay;
-
-  if (places.length < Math.min(neededPlaces, 3)) {
-    return null;
-  }
-
-  const startDate = options.startDate || new Date().toISOString().split('T')[0];
-  const people = Number(options.people || 1);
-  const budgetPlan = getBudgetPlan(budget, durationDays);
-  const activityBudgetPerDay = budgetPlan
-    ? Math.floor(budgetPlan.activitiesAndEntranceFees / Math.max(Number(durationDays), 1))
-    : 0;
-  const foodBudgetPerMeal = budgetPlan
-    ? Math.floor(budgetPlan.foodAndBeverage / Math.max(Number(durationDays) * 2, 1))
-    : 0;
-  const selectedPlaces = places.slice(0, neededPlaces);
-
-  const itinerary = Array.from({ length: Number(durationDays) }, (_, dayIndex) => {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + dayIndex);
-    const dayPlaces = selectedPlaces.slice(
-      dayIndex * activitiesPerDay,
-      dayIndex * activitiesPerDay + activitiesPerDay
-    );
-
-    return {
-      day: dayIndex + 1,
-      date: date.toISOString().split('T')[0],
-      theme: `Khám phá ${destination} theo sở thích`,
-      sourceStyle: preferredStyles.filter((style) => style !== 'GENERAL').join('+') || 'PLACE',
-      activities: dayPlaces.map((place, activityIndex) => {
-        const category = getPlaceCategory(place, preferredStyles);
-        const rawCost = getPlaceCost(place);
-        const targetCost = category === 'FOOD' ? foodBudgetPerMeal : activityBudgetPerDay;
-        const cost = targetCost
-          ? Math.min(rawCost || targetCost, targetCost)
-          : rawCost;
-
-        return {
-          placeId: place._id?.toString(),
-          time: TIME_SLOTS[activityIndex] || '15:00',
-          location: place.name,
-          address: place.address || '',
-          coordinates: place.coordinates,
-          description: getPlaceDescription(place),
-          cost: roundToNearest(cost, 10000),
-          category,
-          transport: activityIndex === 0 ? 'GRAB' : 'MOTORBIKE',
-          durationMinutes: category === 'FOOD' ? 60 : 90,
-        };
-      }),
-    };
-  });
-
-  const restaurants = selectedPlaces
-    .filter((place) => getPlaceCategory(place, preferredStyles) === 'FOOD')
-    .slice(0, 5)
-    .map((place) => ({
-      name: place.name,
-      cuisineType: 'Ẩm thực địa phương',
-      averagePricePerPerson: Math.max(getPlaceCost(place), foodBudgetPerMeal || 50000),
-      rating: place.rating || 4.5,
-      address: place.address || '',
-      description: getPlaceDescription(place),
-    }));
-
-  const result = {
-    destination,
-    startDate,
-    days: Number(durationDays),
-    people,
-    budget: Number(budget || 0),
-    travelStyle: options.travelStyle || preferences.join(', ') || 'tự túc',
-    interests: options.interests || preferences.join(', ') || 'tham quan',
-    hotelArea: options.hotelArea || 'Trung tâm',
-    aiProvider: 'places-random',
-    templateStyles: preferredStyles.filter((style) => style !== 'GENERAL'),
-    hotelRecommendation: {
-      name: `Khách sạn khu vực ${destination}`,
-      address: options.hotelArea || `Trung tâm ${destination}`,
-      description: 'Gợi ý lưu trú gần các điểm trong lịch trình.',
-      estimatedCostPerNight: budgetPlan
-        ? roundToNearest(Math.floor(budgetPlan.accommodation / Math.max(Number(durationDays), 1)), 10000)
-        : 0,
-    },
-    restaurantRecommendations: restaurants,
-    itinerary,
-  };
-
-  result.budgetBreakdown = calculateBudgetBreakdown(result, budget, durationDays);
-  return fitResultToBudget(result, budget, durationDays);
-};
-
-const mergeRestaurantRecommendations = (templates) => {
-  const seenNames = new Set();
-
-  return templates
-    .flatMap((template) => template.result?.restaurantRecommendations || [])
-    .filter((restaurant) => {
-      const key = normalizeText(restaurant.name);
-      if (!key || seenNames.has(key)) {
-        return false;
-      }
-
-      seenNames.add(key);
-      return true;
-    })
-    .slice(0, 5);
-};
-
-const composeTemplateDays = (templates, durationDays, startDate) => {
-  const availableDays = templates.flatMap((template) =>
-    (template.result?.itinerary || []).map((day) => ({
-      sourceStyle: template.travelStyleKey,
-      day,
-    }))
-  );
-
-  if (!availableDays.length) {
+  if (!mixedPlaces.length) {
     return [];
   }
 
-  return Array.from({ length: Number(durationDays) }, (_, index) => {
-    const source = availableDays[index % availableDays.length];
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + index);
+  const picked = [];
+  let pool = shuffleWeightedPlaces(mixedPlaces, preferredStyles, budgetPlan, durationDays, people);
 
-    return {
-      ...cloneJson(source.day),
-      day: index + 1,
-      date: date.toISOString().split('T')[0],
-      sourceStyle: source.sourceStyle,
-    };
-  });
-};
-
-const findTemplateItinerary = async (
-  destination,
-  durationDays,
-  budget,
-  preferences = [],
-  options = {}
-) => {
-  const destinationNorm = normalizeText(destination);
-  const preferredStyles = getPreferredTravelStyles(options);
-
-  const templates = await ItineraryTemplate.find({
-    aliases: destinationNorm,
-  }).lean();
-
-  const matchedTemplates = preferredStyles
-    .map((style) => templates.find((item) => item.travelStyleKey === style))
-    .filter(Boolean);
-
-  const selectedTemplates = matchedTemplates.length ? matchedTemplates : templates.slice(0, 1);
-
-  if (!selectedTemplates.length) {
-    return null;
+  while (picked.length < count) {
+    if (!pool.length) {
+      pool = shuffleWeightedPlaces(mixedPlaces, preferredStyles, budgetPlan, durationDays, people);
+    }
+    picked.push(pool.shift());
   }
 
-  console.log(
-    `Using DB itinerary template for "${destination}" (${selectedTemplates
-      .map((template) => template.travelStyleKey)
-      .join('+')}).`
-  );
-
-  const startDate = options.startDate || new Date().toISOString().split('T')[0];
-  const people = Number(options.people || 1);
-  const travelStyle = options.travelStyle || preferences.join(', ') || 'tu tuc';
-  const interests = options.interests || preferences.join(', ') || 'tham quan';
-  const hotelArea = options.hotelArea || 'Trung tam';
-
-  const primaryTemplate = selectedTemplates[0];
-  const result = cloneJson(primaryTemplate.result);
-
-  result.restaurantRecommendations = mergeRestaurantRecommendations(selectedTemplates);
-  result.itinerary = composeTemplateDays(selectedTemplates, durationDays, startDate);
-
-  result.destination = destination;
-  result.startDate = startDate;
-  result.days = Number(durationDays);
-  result.people = people;
-  result.budget = Number(budget || 0);
-  result.travelStyle = travelStyle;
-  result.interests = interests;
-  result.hotelArea = hotelArea;
-  result.aiProvider = 'database-template';
-  result.templateStyles = selectedTemplates.map((template) => template.travelStyleKey);
-
-  return fitResultToBudget(result, budget, durationDays);
+  return picked;
 };
 
-const buildPrompt = ({
-  destination,
+const getActivityCategory = (place, preferredStyles) => {
+  const text = getPlaceText(place);
+  const foodMatched = (STYLE_KEYWORDS.FOOD || []).some((keyword) => text.includes(keyword));
+  if (foodMatched) return 'FOOD';
+
+  const matchedStyle = preferredStyles.find((style) =>
+    (STYLE_KEYWORDS[style] || []).some((keyword) => text.includes(keyword))
+  );
+
+  return STYLE_CATEGORY[matchedStyle] || 'PLACE';
+};
+
+const getPlaceDescription = (place) => {
+  const intro = String(place.introduction || '').split('.').find(Boolean);
+  if (intro) return intro.trim();
+  return `Khám phá ${place.name} trong lịch trình của bạn.`;
+};
+
+const createPlaceActivity = ({
+  place,
+  preferredStyles,
+  index,
+  budgetPlan,
   durationDays,
-  budget,
-  startDate,
   people,
-  travelStyle,
-  interests,
-  hotelArea,
 }) => {
-  return `
-Return ONLY valid JSON. No markdown. No explanation.
+  const category = getActivityCategory(place, preferredStyles);
+  const rawCostPerPerson = parsePriceNumber(place.ticketPrice);
+  const partySize = Math.max(Number(people || 1), 1);
+  const days = Math.max(Number(durationDays || 1), 1);
+  const perDayActivityBudget = Math.floor(
+    Number(budgetPlan.activitiesAndEntranceFees || 0) / days
+  );
+  const perActivityBudget = Math.floor(perDayActivityBudget / 2);
+  const perMealBudget = Math.floor(
+    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * 2, 1)
+  );
+  const targetCost = category === 'FOOD' ? perMealBudget : perActivityBudget || perDayActivityBudget;
+  const rawTotalCost =
+    rawCostPerPerson === null || (category === 'FOOD' && rawCostPerPerson === 0)
+      ? null
+      : rawCostPerPerson * partySize;
+  const cost = targetCost
+    ? rawTotalCost === null
+      ? targetCost
+      : Math.min(rawTotalCost, targetCost)
+    : rawTotalCost || 0;
 
-Create a practical Vietnam travel itinerary.
-
-Output language:
-- JSON keys must stay exactly in English.
-- All user-facing text values must be in Vietnamese.
-- Place names should use Vietnamese names when available.
-
-Input:
-destination=${destination}
-startDate=${startDate}
-days=${durationDays}
-people=${people}
-budgetVND=${budget}
-style=${travelStyle}
-interests=${interests}
-hotelArea=${hotelArea}
-
-Rules:
-- Exactly ${durationDays} days.
-- 3 activities per day.
-- Keep places in the same day geographically close.
-- Costs are numbers in VND.
-- Total estimated cost should fit the budget.
-- Use these categories only: FOOD, PLACE, HOTEL, TRANSPORT, REST, SHOPPING, OTHER.
-- Use these transports only: WALKING, BIKE, MOTORBIKE, CAR, BUS, TAXI, GRAB, OTHER.
-- Keep descriptions short, max 20 words.
-
-JSON shape:
-{
-  "hotelRecommendation": {
-    "name": "",
-    "address": "",
-    "description": "",
-    "estimatedCostPerNight": 0
-  },
-  "restaurantRecommendations": [
-    {
-      "name": "",
-      "cuisineType": "",
-      "averagePricePerPerson": 0,
-      "rating": 0,
-      "address": "",
-      "description": ""
-    }
-  ],
-  "itinerary": [
-    {
-      "day": 1,
-      "date": "YYYY-MM-DD",
-      "theme": "",
-      "activities": [
-        {
-          "time": "08:00",
-          "location": "",
-          "description": "",
-          "cost": 0,
-          "category": "PLACE",
-          "transport": "GRAB",
-          "durationMinutes": 60
-        }
-      ]
-    }
-  ]
-}
-`;
+  return {
+    placeId: place._id?.toString(),
+    time: TIME_SLOTS[index] || '15:00',
+    location: place.name,
+    address: place.address || '',
+    coordinates: place.coordinates,
+    description: getPlaceDescription(place),
+    cost: roundToNearest(cost, 10000),
+    category,
+    transport: index === 0 ? 'GRAB' : 'MOTORBIKE',
+    durationMinutes: category === 'FOOD' ? 60 : 90,
+  };
 };
 
 const generateItinerary = async (
@@ -588,330 +304,97 @@ const generateItinerary = async (
   preferences = [],
   options = {}
 ) => {
-  durationDays = Number(durationDays);
-
-  if (!durationDays || durationDays < 1) {
+  const days = Number(durationDays);
+  if (!days || days < 1) {
     throw new Error('durationDays must be at least 1');
   }
 
-  if (durationDays > 5) {
-    throw new Error('Free AI plan only supports maximum 5 days per itinerary');
-  }
-
-  const placeBasedResult = await generatePlaceBasedItinerary(
-    destination,
-    durationDays,
-    budget,
-    preferences,
-    options
-  );
-
-  if (placeBasedResult) {
-    console.log(`Using random places itinerary for "${destination}".`);
-    return placeBasedResult;
-  }
-
-  const templateResult = await findTemplateItinerary(
-    destination,
-    durationDays,
-    budget,
-    preferences,
-    options
-  );
-
-  if (templateResult) {
-    return templateResult;
-  }
-
-  const useGemini = process.env.USE_GEMINI === 'true';
-  const apiKey = useGemini ? process.env.GEMINI_API_KEY : null;
-
-  if (!apiKey) {
-    console.warn('Missing GEMINI_API_KEY. Using mock itinerary.');
-    return generateMockItinerary(destination, durationDays, budget, preferences, options);
-  }
-
   const startDate = options.startDate || new Date().toISOString().split('T')[0];
   const people = Number(options.people || 1);
-  const travelStyle =
-    options.travelStyle || preferences.join(', ') || 'tự túc, tiết kiệm';
-  const interests =
-    options.interests || preferences.join(', ') || 'ẩm thực, văn hóa, ngắm cảnh';
-  const hotelArea =
-    options.hotelArea || 'trung tâm thành phố hoặc gần điểm du lịch chính';
-
-  const cacheKey = createCacheKey(destination, durationDays, budget, preferences, {
-    startDate,
-    people,
-    travelStyle,
-    interests,
-    hotelArea,
-  });
-
-  if (memoryCache.has(cacheKey)) {
-    console.log('Returning itinerary from memory cache.');
-    return memoryCache.get(cacheKey);
-  }
-  const cachedItinerary = await ItineraryCache.findOne({ cacheKey });
-
-  if (cachedItinerary) {
-    console.log('Returning itinerary from MongoDB cache.');
-    memoryCache.set(cacheKey, cachedItinerary.result);
-    return cachedItinerary.result;
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite',
-
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-      maxOutputTokens: 1800,
-    },
-  });
-
-  const prompt = buildPrompt({
+  const preferredStyles = getPreferredTravelStyles(options);
+  const activitiesPerDay = 3;
+  const neededPlaces = days * activitiesPerDay;
+  const budgetPlan = getBudgetPlan(budget, days);
+  const places = await pickPlaces(
     destination,
-    durationDays,
-    budget,
-    preferences,
-    startDate,
-    people,
-    travelStyle,
-    interests,
-    hotelArea,
-  });
+    preferredStyles,
+    neededPlaces,
+    budgetPlan,
+    days,
+    people
+  );
 
-  const maxRetries = 1;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Generating itinerary with Gemini. Attempt ${attempt + 1}`);
-
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      const aiResult = safeJsonParse(responseText);
-
-      const finalResult = {
-        ...aiResult,
-        destination,
-        startDate,
-        days: Number(durationDays),
-        people,
-        budget: Number(budget),
-        travelStyle,
-        interests,
-        hotelArea,
-      };
-
-      finalResult.budgetBreakdown = calculateBudgetBreakdown(
-        finalResult,
-        budget,
-        durationDays
-      );
-
-      memoryCache.set(cacheKey, finalResult);
-      await ItineraryCache.findOneAndUpdate(
-        { cacheKey },
-        {
-          cacheKey,
-          destination,
-          durationDays,
-          budget,
-          preferences,
-          options: {
-            startDate,
-            people,
-            travelStyle,
-            interests,
-            hotelArea,
-          },
-          result: finalResult,
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
-        },
-        {
-          upsert: true,
-          new: true,
-        }
-      );
-
-      return finalResult;
-    } catch (error) {
-      const status = error?.status || error?.response?.status;
-      const message = error?.message || '';
-
-      console.error('Gemini generation error:', message);
-
-      const isQuotaError =
-        status === 429 ||
-        message.includes('Too Many Requests') ||
-        message.includes('quota');
-
-      if (isQuotaError) {
-        console.warn('Gemini quota/rate limit reached. Returning mock itinerary without retry.');
-        return generateMockItinerary(
-          destination,
-          durationDays,
-          budget,
-          preferences,
-          options
-        );
-      }
-
-      const isRetryable =
-        status === 503 ||
-        message.includes('high demand') ||
-        message.includes('Service Unavailable');
-
-      if (isRetryable && attempt < maxRetries) {
-        const retryDelayMatch = message.match(/retryDelay":"(\d+)s"/);
-        const retryInMatch = message.match(/retry in ([\d.]+)s/i);
-
-        const delay = retryDelayMatch
-          ? Number(retryDelayMatch[1]) * 1000
-          : retryInMatch
-            ? Math.ceil(Number(retryInMatch[1])) * 1000
-            : 5000 * (attempt + 1);
-
-        console.log(`Retrying Gemini after ${delay}ms...`);
-        await sleep(delay);
-        continue;
-      }
-
-      console.warn('Gemini failed. Returning mock itinerary.');
-      return generateMockItinerary(
-        destination,
-        durationDays,
-        budget,
-        preferences,
-        options
-      );
-    }
+  if (!places.length) {
+    throw new Error(`Khong co dia diem nao trong bang places cho "${destination}".`);
   }
-};
 
-const generateMockItinerary = (
-  destination,
-  durationDays,
-  budget,
-  preferences = [],
-  options = {}
-) => {
-  const startDate = options.startDate || new Date().toISOString().split('T')[0];
-  const people = Number(options.people || 1);
-  const travelStyle = options.travelStyle || preferences.join(', ') || 'tự túc';
-  const interests = options.interests || preferences.join(', ') || 'ngắm cảnh';
-  const hotelArea = options.hotelArea || 'Trung tâm';
-
-  const itinerary = [];
-
-  for (let i = 1; i <= Number(durationDays); i++) {
+  const itinerary = Array.from({ length: days }, (_, dayIndex) => {
     const date = new Date(startDate);
-    date.setDate(date.getDate() + i - 1);
+    date.setDate(date.getDate() + dayIndex);
+    const dayPlaces = places.slice(
+      dayIndex * activitiesPerDay,
+      dayIndex * activitiesPerDay + activitiesPerDay
+    );
 
-    itinerary.push({
-      day: i,
+    return {
+      day: dayIndex + 1,
       date: date.toISOString().split('T')[0],
-      theme: `Khám phá ${destination} ngày ${i}`,
-      activities: [
-        {
-          time: '08:00',
-          location: `Quán ăn địa phương tại ${destination}`,
-          description: 'Ăn sáng với món đặc sản địa phương.',
-          cost: Math.round((budget * 0.04) / durationDays),
-          category: 'FOOD',
-          transport: 'WALKING',
-          durationMinutes: 60,
-        },
-        {
-          time: '09:30',
-          location: `Điểm tham quan nổi bật ở ${destination}`,
-          description: `Tham quan theo sở thích: ${preferences.join(', ') || 'ngắm cảnh'
-            }.`,
-          cost: Math.round((budget * 0.08) / durationDays),
-          category: 'PLACE',
-          transport: 'GRAB',
-          durationMinutes: 120,
-        },
-        {
-          time: '12:00',
-          location: `Nhà hàng bình dân tại ${destination}`,
-          description: 'Ăn trưa với món địa phương.',
-          cost: Math.round((budget * 0.06) / durationDays),
-          category: 'FOOD',
-          transport: 'WALKING',
-          durationMinutes: 60,
-        },
-        {
-          time: '15:00',
-          location: `Khu vui chơi hoặc check-in tại ${destination}`,
-          description: 'Thư giãn, chụp ảnh và khám phá khu vực xung quanh.',
-          cost: Math.round((budget * 0.07) / durationDays),
-          category: 'PLACE',
-          transport: 'GRAB',
-          durationMinutes: 120,
-        },
-      ],
-    });
-  }
+      theme: `Khám phá ${destination} theo sở thích`,
+      sourceStyle: preferredStyles.join('+'),
+      activities: dayPlaces.map((place, index) =>
+        createPlaceActivity({
+          place,
+          preferredStyles,
+          index,
+          budgetPlan,
+          durationDays: days,
+          people,
+        })
+      ),
+    };
+  });
+
+  const restaurants = places
+    .filter((place) => getActivityCategory(place, preferredStyles) === 'FOOD')
+    .slice(0, 5)
+    .map((place) => ({
+      name: place.name,
+      cuisineType: 'Ẩm thực địa phương',
+      averagePricePerPerson: Math.max(parsePriceNumber(place.ticketPrice) || 0, 50000),
+      rating: place.rating || 4.5,
+      address: place.address || '',
+      description: getPlaceDescription(place),
+    }));
 
   const result = {
     destination,
     startDate,
-    days: Number(durationDays),
+    days,
     people,
-    budget: Number(budget),
-    travelStyle,
-    interests,
-    hotelArea,
+    budget: Number(budget || 0),
+    travelStyle: options.travelStyle || preferences.join(', ') || preferredStyles.join(', '),
+    interests: options.interests || preferences.join(', ') || '',
+    hotelArea: options.hotelArea || 'Trung tâm',
+    aiProvider: 'places-random',
+    templateStyles: preferredStyles,
     hotelRecommendation: {
-      name: `Khách sạn trung tâm ${destination}`,
-      address: `Khu vực trung tâm ${destination}`,
-      description:
-        'Khách sạn phù hợp ngân sách, thuận tiện di chuyển đến các điểm tham quan chính.',
-      estimatedCostPerNight: Math.round((budget * 0.3) / durationDays),
+      name: `Khách sạn khu vực ${destination}`,
+      address: options.hotelArea || `Trung tâm ${destination}`,
+      description: 'Gợi ý lưu trú gần các điểm trong lịch trình.',
+      estimatedCostPerNight: roundToNearest(
+        Math.floor(Number(budgetPlan.accommodation || 0) / Math.max(days, 1)),
+        10000
+      ),
     },
-    restaurantRecommendations: [
-      {
-        name: `Quán đặc sản ${destination}`,
-        cuisineType: 'Ẩm thực địa phương',
-        averagePricePerPerson: Math.round(budget * 0.04),
-        rating: 4.5,
-        address: `Trung tâm ${destination}`,
-        description: 'Quán ăn địa phương phù hợp để thử món đặc sản.',
-      },
-      {
-        name: `Nhà hàng bình dân ${destination}`,
-        cuisineType: 'Món Việt',
-        averagePricePerPerson: Math.round(budget * 0.05),
-        rating: 4.3,
-        address: `Khu ăn uống ${destination}`,
-        description: 'Phù hợp cho nhóm bạn hoặc gia đình.',
-      },
-      {
-        name: `Quán ăn tối nổi bật ${destination}`,
-        cuisineType: 'Đặc sản địa phương',
-        averagePricePerPerson: Math.round(budget * 0.06),
-        rating: 4.4,
-        address: `Gần trung tâm ${destination}`,
-        description: 'Không gian dễ chịu, giá hợp lý.',
-      },
-    ],
+    restaurantRecommendations: restaurants,
     itinerary,
   };
 
-  result.budgetBreakdown = calculateBudgetBreakdown(
-    result,
-    budget,
-    durationDays
-  );
-
-  return fitResultToBudget(result, budget, durationDays);
+  result.budgetBreakdown = calculateBudgetBreakdown(result, budget, days);
+  console.log(`Generated itinerary from places collection for "${destination}".`);
+  return result;
 };
 
 module.exports = {
   generateItinerary,
-  generateMockItinerary,
 };
