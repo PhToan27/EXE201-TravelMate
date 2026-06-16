@@ -29,20 +29,6 @@ const getNavigationToPlace = async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-    const data = await navigationService.getRouteToPlace({
-      placeId: req.params.placeId,
-      placeName: req.query.placeName,
-      fromLat: req.query.fromLat,
-      fromLng: req.query.fromLng,
-      vehicle: req.query.vehicle,
-    });
-
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
     const statusCode = error.statusCode || error.response?.status || 500;
     const message =
       error.response?.data?.message ||
