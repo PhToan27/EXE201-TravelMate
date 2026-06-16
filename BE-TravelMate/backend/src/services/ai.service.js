@@ -2,12 +2,22 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
 const ItineraryCache = require('../models/ItineraryCache');
 const ItineraryTemplate = require('../models/ItineraryTemplate');
+const Place = require('../models/Place');
 const memoryCache = new Map();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeText = (value) =>
   String(value || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+const normalizeForMatch = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .trim()
+    .replace(/\s+/g, ' ');
 
 const normalizeBudget = (budget) => {
   const value = Number(budget || 0);
@@ -181,6 +191,215 @@ const fitResultToBudget = (result, budget, durationDays) => {
   fitted.budgetBreakdown = calculateBudgetBreakdown(fitted, budget, durationDays);
 
   return fitted;
+};
+
+const STYLE_KEYWORDS = {
+  FOOD: ['food', 'am thuc', 'an uong', 'quan', 'nha hang', 'cho', 'hai san', 'mi quang', 'banh trang'],
+  BEACH: ['beach', 'bien', 'dao', 'bai tam', 'my khe', 'pham van dong', 'son tra'],
+  CULTURE: ['culture', 'van hoa', 'chua', 'bao tang', 'di tich', 'pho co', 'cau', 'lang'],
+  NATURE: ['nature', 'thien nhien', 'nui', 'son tra', 'ngu hanh son', 'rung', 'suoi', 'deo'],
+  ADVENTURE: ['adventure', 'kham pha', 'leo nui', 'trekking', 'zipline', 'hang dong'],
+  CHILL: ['chill', 'thu gian', 'cafe', 'bien', 'cong vien', 'ngam canh'],
+  FAMILY: ['family', 'gia dinh', 'tre em', 'cong vien', 'khu vui choi'],
+  BUDGET: ['budget', 'tiet kiem', 'mien phi', 'cho', 'bien', 'cong vien'],
+};
+
+const TIME_SLOTS = ['08:00', '10:30', '14:30', '18:00'];
+
+const parsePriceNumber = (value) => {
+  const text = normalizeForMatch(value);
+  if (!text || text.includes('mien phi') || text.includes('free')) return 0;
+
+  const matches = String(value || '').match(/\d[\d.,]*/g);
+  if (!matches?.length) return 0;
+
+  const numbers = matches
+    .map((item) => Number(item.replace(/[.,]/g, '')))
+    .filter(Number.isFinite);
+
+  return numbers.length ? Math.max(...numbers) : 0;
+};
+
+const getPlaceCost = (place) => parsePriceNumber(place.ticketPrice);
+
+const getPlaceText = (place) =>
+  normalizeForMatch([
+    place.name,
+    place.category,
+    place.address,
+    place.introduction,
+    place.ticketPrice,
+  ].filter(Boolean).join(' '));
+
+const getPlaceStyleScore = (place, preferredStyles) => {
+  const text = getPlaceText(place);
+  const styles = preferredStyles.filter((style) => style !== 'GENERAL');
+
+  if (!styles.length) return 1;
+
+  return styles.reduce((score, style) => {
+    const keywords = STYLE_KEYWORDS[style] || [];
+    const matchedCount = keywords.filter((keyword) => text.includes(keyword)).length;
+    return score + matchedCount * 3;
+  }, 0);
+};
+
+const getPlaceCategory = (place, preferredStyles) => {
+  const text = getPlaceText(place);
+  if ((STYLE_KEYWORDS.FOOD || []).some((keyword) => text.includes(keyword))) return 'FOOD';
+  if (preferredStyles.includes('FOOD')) return 'FOOD';
+  if (preferredStyles.includes('BEACH') || text.includes('bien')) return 'REST';
+  return 'PLACE';
+};
+
+const getPlaceDescription = (place) => {
+  if (place.introduction) {
+    return String(place.introduction).split('.').filter(Boolean)[0].trim() || place.introduction;
+  }
+
+  return `Khám phá ${place.name} theo sở thích chuyến đi.`;
+};
+
+const shuffleWeightedPlaces = (places, preferredStyles) =>
+  [...places]
+    .map((place) => {
+      const ratingScore = Number(place.rating || 4) / 5;
+      const styleScore = getPlaceStyleScore(place, preferredStyles);
+      const randomScore = Math.random() * 4;
+
+      return {
+        place,
+        score: styleScore + ratingScore + randomScore,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.place);
+
+const findPlacesForItinerary = async (destination, preferredStyles, durationDays) => {
+  const destinationText = normalizeForMatch(destination);
+  const places = await Place.find({}).lean();
+
+  const destinationPlaces = places.filter((place) => {
+    const text = getPlaceText(place);
+    return (
+      !destinationText ||
+      text.includes(destinationText) ||
+      destinationText.includes(normalizeForMatch(place.address))
+    );
+  });
+
+  const sourcePlaces = destinationPlaces.length ? destinationPlaces : places;
+  const scoredPlaces = sourcePlaces.filter((place) =>
+    preferredStyles.includes('GENERAL') || getPlaceStyleScore(place, preferredStyles) > 0
+  );
+
+  const minimumNeeded = Math.min(Number(durationDays) * 3, sourcePlaces.length);
+  const matchedPlaces = scoredPlaces.length >= minimumNeeded ? scoredPlaces : sourcePlaces;
+
+  return shuffleWeightedPlaces(matchedPlaces, preferredStyles);
+};
+
+const generatePlaceBasedItinerary = async (
+  destination,
+  durationDays,
+  budget,
+  preferences = [],
+  options = {}
+) => {
+  const preferredStyles = getPreferredTravelStyles(options);
+  const places = await findPlacesForItinerary(destination, preferredStyles, durationDays);
+  const activitiesPerDay = 3;
+  const neededPlaces = Number(durationDays) * activitiesPerDay;
+
+  if (places.length < Math.min(neededPlaces, 3)) {
+    return null;
+  }
+
+  const startDate = options.startDate || new Date().toISOString().split('T')[0];
+  const people = Number(options.people || 1);
+  const budgetPlan = getBudgetPlan(budget, durationDays);
+  const activityBudgetPerDay = budgetPlan
+    ? Math.floor(budgetPlan.activitiesAndEntranceFees / Math.max(Number(durationDays), 1))
+    : 0;
+  const foodBudgetPerMeal = budgetPlan
+    ? Math.floor(budgetPlan.foodAndBeverage / Math.max(Number(durationDays) * 2, 1))
+    : 0;
+  const selectedPlaces = places.slice(0, neededPlaces);
+
+  const itinerary = Array.from({ length: Number(durationDays) }, (_, dayIndex) => {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + dayIndex);
+    const dayPlaces = selectedPlaces.slice(
+      dayIndex * activitiesPerDay,
+      dayIndex * activitiesPerDay + activitiesPerDay
+    );
+
+    return {
+      day: dayIndex + 1,
+      date: date.toISOString().split('T')[0],
+      theme: `Khám phá ${destination} theo sở thích`,
+      sourceStyle: preferredStyles.filter((style) => style !== 'GENERAL').join('+') || 'PLACE',
+      activities: dayPlaces.map((place, activityIndex) => {
+        const category = getPlaceCategory(place, preferredStyles);
+        const rawCost = getPlaceCost(place);
+        const targetCost = category === 'FOOD' ? foodBudgetPerMeal : activityBudgetPerDay;
+        const cost = targetCost
+          ? Math.min(rawCost || targetCost, targetCost)
+          : rawCost;
+
+        return {
+          placeId: place._id?.toString(),
+          time: TIME_SLOTS[activityIndex] || '15:00',
+          location: place.name,
+          address: place.address || '',
+          coordinates: place.coordinates,
+          description: getPlaceDescription(place),
+          cost: roundToNearest(cost, 10000),
+          category,
+          transport: activityIndex === 0 ? 'GRAB' : 'MOTORBIKE',
+          durationMinutes: category === 'FOOD' ? 60 : 90,
+        };
+      }),
+    };
+  });
+
+  const restaurants = selectedPlaces
+    .filter((place) => getPlaceCategory(place, preferredStyles) === 'FOOD')
+    .slice(0, 5)
+    .map((place) => ({
+      name: place.name,
+      cuisineType: 'Ẩm thực địa phương',
+      averagePricePerPerson: Math.max(getPlaceCost(place), foodBudgetPerMeal || 50000),
+      rating: place.rating || 4.5,
+      address: place.address || '',
+      description: getPlaceDescription(place),
+    }));
+
+  const result = {
+    destination,
+    startDate,
+    days: Number(durationDays),
+    people,
+    budget: Number(budget || 0),
+    travelStyle: options.travelStyle || preferences.join(', ') || 'tự túc',
+    interests: options.interests || preferences.join(', ') || 'tham quan',
+    hotelArea: options.hotelArea || 'Trung tâm',
+    aiProvider: 'places-random',
+    templateStyles: preferredStyles.filter((style) => style !== 'GENERAL'),
+    hotelRecommendation: {
+      name: `Khách sạn khu vực ${destination}`,
+      address: options.hotelArea || `Trung tâm ${destination}`,
+      description: 'Gợi ý lưu trú gần các điểm trong lịch trình.',
+      estimatedCostPerNight: budgetPlan
+        ? roundToNearest(Math.floor(budgetPlan.accommodation / Math.max(Number(durationDays), 1)), 10000)
+        : 0,
+    },
+    restaurantRecommendations: restaurants,
+    itinerary,
+  };
+
+  result.budgetBreakdown = calculateBudgetBreakdown(result, budget, durationDays);
+  return fitResultToBudget(result, budget, durationDays);
 };
 
 const mergeRestaurantRecommendations = (templates) => {
@@ -377,6 +596,19 @@ const generateItinerary = async (
 
   if (durationDays > 5) {
     throw new Error('Free AI plan only supports maximum 5 days per itinerary');
+  }
+
+  const placeBasedResult = await generatePlaceBasedItinerary(
+    destination,
+    durationDays,
+    budget,
+    preferences,
+    options
+  );
+
+  if (placeBasedResult) {
+    console.log(`Using random places itinerary for "${destination}".`);
+    return placeBasedResult;
   }
 
   const templateResult = await findTemplateItinerary(

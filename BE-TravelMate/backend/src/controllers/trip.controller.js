@@ -233,6 +233,13 @@ const createTrip = async (req, res) => {
               description: act.description || '',
               category: (act.category || 'OTHER').toUpperCase(),
               locationName: act.location || 'N/A',
+              address: act.address || '',
+              location: act.coordinates
+                ? {
+                    lat: act.coordinates.lat,
+                    lng: act.coordinates.lng,
+                  }
+                : undefined,
               durationMinutes: act.durationMinutes || 60,
               transport: act.transport ? act.transport.toUpperCase() : undefined,
               estimatedCost: act.cost || act.estimatedCost || 0,
