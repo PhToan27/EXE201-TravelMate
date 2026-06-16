@@ -374,9 +374,22 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         let currentOrigin = null;
 
         if (permission.status === 'granted') {
-          const current = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
+          let current;
+          try {
+            current = await withTimeout(
+              Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              }),
+              LOCATION_TIMEOUT_MS,
+              'Khong the lay vi tri hien tai. Hay kiem tra GPS va thu lai.'
+            );
+          } catch (locationError) {
+            const lastKnown = await Location.getLastKnownPositionAsync();
+            if (!lastKnown) {
+              throw locationError;
+            }
+            current = lastKnown;
+          }
 
           currentOrigin = {
             latitude: current.coords.latitude,
@@ -394,27 +407,6 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         }
 
         fallbackOrigin = currentOrigin;
-        let current;
-        try {
-          current = await withTimeout(
-            Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced,
-            }),
-            LOCATION_TIMEOUT_MS,
-            'Khong the lay vi tri hien tai. Hay kiem tra GPS va thu lai.'
-          );
-        } catch (locationError) {
-          const lastKnown = await Location.getLastKnownPositionAsync();
-          if (!lastKnown) {
-            throw locationError;
-          }
-          current = lastKnown;
-        }
-
-        const currentOrigin = {
-          latitude: current.coords.latitude,
-          longitude: current.coords.longitude,
-        };
         setOrigin(currentOrigin);
 
         if (!placeId && initialPlace) {
