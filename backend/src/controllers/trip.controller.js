@@ -111,7 +111,7 @@ const createTrip = async (req, res) => {
           }
         );
       } catch (aiErr) {
-        console.error('AI itinerary generation failed, logging error:', aiErr);
+        console.error('Itinerary generation from places failed, logging error:', aiErr);
         await AiLog.create({
           userId: req.user._id,
           tripId: trip._id,
@@ -143,7 +143,7 @@ const createTrip = async (req, res) => {
           travelStyle: travelStyle || 'CHILL',
           interests: parsedInterests,
         },
-        prompt: 'Generated via ai.service',
+        prompt: 'Generated from places collection',
         response: generated,
         status: 'SUCCESS',
       });
