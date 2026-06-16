@@ -34,6 +34,15 @@ const formatDisplay = (date) => {
   return `${d}/${m}/${y}`;
 };
 
+const onlyDigits = (value) => String(value || '').replace(/[^\d]/g, '');
+
+const formatVndInput = (value) => {
+  const digits = onlyDigits(value);
+  if (!digits) return '';
+
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 // ----- Date Picker Row -----
 const DatePickerRow = ({ label, date, onPress, error }) => (
   <View style={dpStyles.container}>
@@ -159,7 +168,7 @@ const CreateTripScreen = ({ navigation }) => {
         destination: destination.trim(),
         startDate: toDateString(startDateObj),
         endDate: toDateString(endDateObj),
-        budget: budget ? parseInt(budget.replace(/[^\d]/g, ''), 10) : 0,
+        budget: budget ? parseInt(onlyDigits(budget), 10) : 0,
         people: parseInt(people, 10) || 1,
         travelStyle: travelStyles.join(', '),
         generateAiItinerary: true,
@@ -248,10 +257,11 @@ const CreateTripScreen = ({ navigation }) => {
               <CustomInput
                 label="NGÂN SÁCH (VND)"
                 value={budget}
-                onChangeText={setBudget}
-                placeholder="VND"
-                keyboardType="numeric"
+                onChangeText={(value) => setBudget(formatVndInput(value))}
+                placeholder="5.000.000"
+                keyboardType="number-pad"
                 leftIcon={<Ionicons name="wallet-outline" size={18} color={COLORS.gray[400]} />}
+                rightText="đ"
               />
             </View>
           </View>
