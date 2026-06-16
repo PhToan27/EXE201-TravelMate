@@ -9,7 +9,16 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://exe201-travelmate.onrender.com/api",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "84711997465-9jhbtav6kkqcus6son8n858gbi16okco.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "84711997465-hmo12f5aoq3n6lfqhdf3d4kt53c4oi79.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "84711997465-guqhvia5o1600t2q6els9cjt84tbao6r.apps.googleusercontent.com"
+      }
     },
     "production": {
       "autoIncrement": true

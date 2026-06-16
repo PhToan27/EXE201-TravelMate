@@ -44,5 +44,4 @@ temp/
 *.tmp
 
 # MongoDB local data (nếu có)
-data/
 mongodb-data/
