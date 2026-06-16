@@ -3,7 +3,16 @@ const Post = require('../models/Post');
 const AdminSetting = require('../models/AdminSetting');
 const Trip = require('../models/Trip');
 const ItineraryTemplate = require('../models/ItineraryTemplate');
-const itineraryTemplates = require('../data/itineraryTemplates');
+
+let itineraryTemplates = [];
+try {
+  itineraryTemplates = require('../data/itineraryTemplates');
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') {
+    throw error;
+  }
+  console.log('Itinerary template seed file not found. Skipping template seeding.');
+}
 
 const seedItineraryTemplates = async () => {
   if (!itineraryTemplates.length) {
