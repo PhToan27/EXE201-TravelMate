@@ -4,7 +4,7 @@ const navigationService = require('../services/navigation.service');
 const getNavigationToPlace = async (req, res) => {
   try {
     const { placeId } = req.params;
-    const { fromLat, fromLng, vehicle = 'motorcycle' } = req.query;
+    const { fromLat, fromLng, vehicle = 'motorcycle', placeName } = req.query;
 
     if (!fromLat || !fromLng) {
       return res.status(400).json({
@@ -25,6 +25,7 @@ const getNavigationToPlace = async (req, res) => {
         longitude: Number(fromLng),
       },
       vehicle,
+      placeName,
     });
 
     return res.json({ success: true, data });
