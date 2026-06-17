@@ -1,11 +1,33 @@
-const buildPlacePayload = (place) => ({
-  id: place._id,
-  name: place.name,
-  address: place.address,
-  latitude: Number(place.coordinates?.lat || 16.0544),
-  longitude: Number(place.coordinates?.lng || 108.2022),
-  openHours: place.openHours,
-});
+const isDefaultDaNangCoordinate = (point) =>
+  point &&
+  Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
+  Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
+
+const getUsablePlaceCoordinate = (place) => {
+  const latitude = Number(place?.coordinates?.lat);
+  const longitude = Number(place?.coordinates?.lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+  const point = { latitude, longitude };
+  return isDefaultDaNangCoordinate(point) ? null : point;
+};
+
+const hasValidCoordinate = (point) =>
+  Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude));
+
+const buildPlacePayload = (place) => {
+  const coordinate = getUsablePlaceCoordinate(place);
+
+  return {
+    id: place._id,
+    name: place.name,
+    address: place.address,
+    latitude: coordinate?.latitude,
+    longitude: coordinate?.longitude,
+    openHours: place.openHours,
+  };
+};
 
 const normalizeCoordinatePair = (pair) => {
   if (!Array.isArray(pair) || pair.length < 2) return null;
@@ -90,6 +112,10 @@ const getVehicleSpeedKmh = (vehicle) => {
 
 const buildFallbackRoute = ({ place, origin, vehicle, reason }) => {
   const placePayload = buildPlacePayload(place);
+  if (!hasValidCoordinate(placePayload)) {
+    throw new Error('Dia diem chua co toa do hop le de dan duong');
+  }
+
   const distanceKm = Number(calculateAirDistanceKm(origin, placePayload).toFixed(1));
   const durationMinutes = Math.max(
     1,
@@ -176,6 +202,9 @@ const fetchVietMapRoute = async ({ origin, destination, vehicle }) => {
 const getNavigationToPlace = async ({ place, origin, vehicle }) => {
   const normalizedVehicle = normalizeVehicle(vehicle);
   const destination = buildPlacePayload(place);
+  if (!hasValidCoordinate(destination)) {
+    throw new Error('Dia diem chua co toa do hop le de dan duong');
+  }
 
   try {
     const path = await fetchVietMapRoute({

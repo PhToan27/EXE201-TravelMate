@@ -196,7 +196,11 @@ const fetchClientVietMapRoute = async ({ place, originPoint, vehicle }) => {
   }
 
   const resolvedPlace = await fetchVietMapPlaceCoordinate(place);
-  const destination = resolvedPlace || getPlaceCoordinate(place);
+  const dbDestination = getPlaceCoordinate(place);
+  const destination = resolvedPlace || dbDestination;
+  if (!destination) {
+    throw new Error('Dia diem chua co toa do hop le');
+  }
   const routeUrl = [
     'https://maps.vietmap.vn/api/route?api-version=1.1',
     `apikey=${VIETMAP_API_KEY}`,
@@ -251,6 +255,10 @@ const fetchClientVietMapRoute = async ({ place, originPoint, vehicle }) => {
 const shouldUpgradeRoute = (data) =>
   !data ||
   ['fallback', 'local-fallback'].includes(data.provider) ||
+  isDefaultDaNangCoordinate({
+    latitude: data?.place?.latitude,
+    longitude: data?.place?.longitude,
+  }) ||
   (data.routeCoordinates || []).length <= 2 ||
   (data.instructions || []).length <= 2;
 
@@ -269,13 +277,28 @@ const calculateDistanceKm = (origin, destination) => {
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const getPlaceCoordinate = (place) => ({
-  latitude: Number(place?.coordinates?.lat || place?.latitude || 16.0544),
-  longitude: Number(place?.coordinates?.lng || place?.longitude || 108.2022),
-});
+const isDefaultDaNangCoordinate = (point) =>
+  point &&
+  Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
+  Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
+
+const getPlaceCoordinate = (place) => {
+  const latitude = Number(place?.coordinates?.lat ?? place?.latitude);
+  const longitude = Number(place?.coordinates?.lng ?? place?.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  const point = { latitude, longitude };
+  return isDefaultDaNangCoordinate(point) ? null : point;
+};
 
 const buildLocalRoute = (place, originPoint, vehicle, reason = '') => {
   const destination = getPlaceCoordinate(place);
+  if (!destination) {
+    throw new Error(reason || 'Dia diem chua co toa do hop le');
+  }
   const distanceKm = Number(calculateDistanceKm(originPoint, destination).toFixed(1));
   const speedKmh = vehicle === 'foot' ? 5 : vehicle === 'bike' ? 15 : vehicle === 'car' ? 40 : 30;
   const durationMinutes = Math.max(1, Math.round((distanceKm / speedKmh) * 60));
@@ -397,6 +420,10 @@ const NavigationDetailScreen = ({ route, navigation }) => {
           };
         } else if (initialPlace) {
           const destinationPoint = getPlaceCoordinate(initialPlace);
+          if (!destinationPoint) {
+            setErrorMessage('Dia diem chua co toa do hop le de dan duong.');
+            return;
+          }
           currentOrigin = {
             latitude: destinationPoint.latitude + 0.03,
             longitude: destinationPoint.longitude - 0.03,
@@ -479,6 +506,10 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         if (initialPlace) {
           if (!fallbackOrigin) {
             const destinationPoint = getPlaceCoordinate(initialPlace);
+            if (!destinationPoint) {
+              setErrorMessage(message);
+              return;
+            }
             fallbackOrigin = {
               latitude: destinationPoint.latitude + 0.03,
               longitude: destinationPoint.longitude - 0.03,
@@ -547,7 +578,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
   }, [routeCoordinates]);
 
   const handleRetry = () => {
-    navigation.replace('NavigationDetail', { placeId, placeName, vehicle });
+    navigation.replace('NavigationDetail', { placeId, placeName, place: initialPlace, vehicle });
   };
 
   if (loading) {

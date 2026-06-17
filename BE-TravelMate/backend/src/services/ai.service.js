@@ -13,12 +13,26 @@ const normalizeText = (value) =>
 const roundToNearest = (value, step = 1000) =>
   Math.max(0, Math.round(Number(value || 0) / step) * step);
 
+const randomInt = (min, max) =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
+
+const uniquePlacesById = (places = []) => {
+  const seen = new Set();
+  return places.filter((place) => {
+    const key = place._id?.toString() || place.name;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const getBudgetPlan = (budget, durationDays) => {
   const totalBudget = Number(budget || 0);
   const days = Math.max(Number(durationDays || 1), 1);
 
   if (!totalBudget) {
     return {
+      totalBudget,
       accommodation: 0,
       foodAndBeverage: 0,
       activitiesAndEntranceFees: 0,
@@ -29,6 +43,7 @@ const getBudgetPlan = (budget, durationDays) => {
   }
 
   return {
+    totalBudget,
     accommodation: Math.round(totalBudget * 0.35),
     foodAndBeverage: Math.round(totalBudget * 0.3),
     activitiesAndEntranceFees: Math.round(totalBudget * 0.25),
@@ -89,11 +104,56 @@ const STYLE_CATEGORY = {
   NATURE: 'PLACE',
 };
 
-const TIME_SLOTS = ['08:00', '10:30', '14:30', '18:00'];
+const TIME_SLOT_PATTERNS = [
+  ['07:30', '09:30', '11:30', '13:30', '15:30', '17:30', '19:30'],
+  ['08:00', '10:00', '12:00', '14:30', '16:30', '18:30', '20:00'],
+  ['07:00', '09:00', '11:00', '13:00', '15:00', '17:00', '19:00'],
+];
+
+const getDailyActivityCount = ({ budgetPlan, preferredStyles, people }) => {
+  const dailyBudget =
+    (Number(budgetPlan.foodAndBeverage || 0) +
+      Number(budgetPlan.activitiesAndEntranceFees || 0)) /
+    Math.max(Number(budgetPlan.days || 1), 1);
+  const perPersonDailyBudget = dailyBudget / Math.max(Number(people || 1), 1);
+
+  if (perPersonDailyBudget && perPersonDailyBudget < 180000) return randomInt(4, 5);
+  if (perPersonDailyBudget && perPersonDailyBudget < 350000) return randomInt(4, 5);
+  if (preferredStyles.includes('FOOD')) return randomInt(5, 7);
+  if (perPersonDailyBudget > 700000) return randomInt(5, 7);
+  return randomInt(4, 6);
+};
+
+const shiftTime = (time, minutes) => {
+  const [hour, minute] = String(time || '08:00').split(':').map(Number);
+  const totalMinutes = Math.max(0, hour * 60 + minute + minutes);
+  const nextHour = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+  const nextMinute = String(totalMinutes % 60).padStart(2, '0');
+  return `${nextHour}:${nextMinute}`;
+};
+
+const getActivityTime = ({ dayIndex, index, dailyCount }) => {
+  const pattern = TIME_SLOT_PATTERNS[dayIndex % TIME_SLOT_PATTERNS.length];
+  if (dailyCount <= 3) {
+    const compactPatterns = [
+      ['08:00', '13:30', '18:00'],
+      ['08:30', '12:00', '16:30'],
+      ['09:00', '14:00', '19:00'],
+    ];
+    const baseTime = compactPatterns[dayIndex % compactPatterns.length][index] || '15:00';
+    return shiftTime(baseTime, randomInt(-1, 1) * 15);
+  }
+
+  return shiftTime(pattern[index] || '18:30', randomInt(-1, 1) * 15);
+};
 
 const getPreferredTravelStyles = (options = {}) => {
-  const raw = normalizeText(`${options.travelStyle || ''} ${options.interests || ''}`).toUpperCase();
-  const styles = ['FOOD', 'BEACH', 'CULTURE', 'NATURE'].filter((style) => raw.includes(style));
+  const raw = normalizeText(`${options.travelStyle || ''} ${options.interests || ''}`);
+  const styles = ['FOOD', 'BEACH', 'CULTURE', 'NATURE'].filter((style) => {
+    const codeMatched = raw.includes(style.toLowerCase());
+    const keywordMatched = (STYLE_KEYWORDS[style] || []).some((keyword) => raw.includes(keyword));
+    return codeMatched || keywordMatched;
+  });
   return styles.length ? styles : ['BEACH'];
 };
 
@@ -135,7 +195,7 @@ const getPlaceStyleScore = (place, preferredStyles) => {
     const matchedCount = (STYLE_KEYWORDS[style] || []).filter((keyword) =>
       text.includes(keyword)
     ).length;
-    return score + matchedCount * 3;
+    return score + matchedCount * (style === 'FOOD' ? 5 : 3);
   }, 0);
 };
 
@@ -147,15 +207,28 @@ const isDestinationMatch = (place, destination) => {
   return text.includes(destinationText) || destinationText.includes('da nang');
 };
 
+const hasUsableCoordinates = (place) => {
+  const lat = Number(place?.coordinates?.lat);
+  const lng = Number(place?.coordinates?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+
+  // Mongo schema default / Da Nang center fallback, not a real place coordinate.
+  const isDefaultDaNangCenter =
+    Math.abs(lat - 16.0544) < 0.0002 && Math.abs(lng - 108.2022) < 0.0002;
+  return !isDefaultDaNangCenter;
+};
+
 const getBudgetTargetForPlace = (place, preferredStyles, budgetPlan, durationDays) => {
   const category = getActivityCategory(place, preferredStyles);
   const days = Math.max(Number(durationDays || 1), 1);
   const perDayActivityBudget = Math.floor(
     Number(budgetPlan.activitiesAndEntranceFees || 0) / days
   );
-  const perActivityBudget = Math.floor(perDayActivityBudget / 2);
+  const plannedActivityStops = preferredStyles.includes('FOOD') ? 3 : 2;
+  const perActivityBudget = Math.floor(perDayActivityBudget / plannedActivityStops);
   const perMealBudget = Math.floor(
-    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * 2, 1)
+    Number(budgetPlan.foodAndBeverage || 0) /
+      Math.max(days * (preferredStyles.includes('FOOD') ? 3 : 2), 1)
   );
 
   return category === 'FOOD' ? perMealBudget : perActivityBudget || perDayActivityBudget;
@@ -190,7 +263,7 @@ const isPlaceWithinBudget = (place, preferredStyles, budgetPlan, durationDays, p
   const totalCost = getPlaceTotalCost(place, people, preferredStyles);
 
   if (!targetCost || totalCost === null || totalCost === 0) return true;
-  return totalCost <= targetCost * 1.3;
+  return totalCost <= targetCost;
 };
 
 const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays, people) =>
@@ -200,6 +273,7 @@ const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays
       score:
         getPlaceStyleScore(place, preferredStyles) +
         getPlaceBudgetScore(place, preferredStyles, budgetPlan, durationDays, people) +
+        (preferredStyles.includes('FOOD') && getActivityCategory(place, preferredStyles) === 'FOOD' ? 6 : 0) +
         Number(place.rating || 4) / 5 +
         Math.random() * 4,
     }))
@@ -208,15 +282,23 @@ const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays
 
 const pickPlaces = async (destination, preferredStyles, count, budgetPlan, durationDays, people) => {
   const allPlaces = await Place.find({}).lean();
-  const destinationPlaces = allPlaces.filter((place) => isDestinationMatch(place, destination));
-  const sourcePlaces = destinationPlaces.length ? destinationPlaces : allPlaces;
+  const coordinatePlaces = allPlaces.filter(hasUsableCoordinates);
+  const candidatePlaces = coordinatePlaces.length >= Math.min(count, 3) ? coordinatePlaces : allPlaces;
+  const destinationPlaces = candidatePlaces.filter((place) => isDestinationMatch(place, destination));
+  const sourcePlaces = destinationPlaces.length ? destinationPlaces : candidatePlaces;
   const budgetMatches = sourcePlaces.filter((place) =>
     isPlaceWithinBudget(place, preferredStyles, budgetPlan, durationDays, people)
   );
-  const budgetSource = budgetMatches.length >= Math.min(count, 3) ? budgetMatches : sourcePlaces;
+  const budgetSource =
+    budgetMatches.length >= Math.min(count, 4)
+      ? budgetMatches
+      : uniquePlacesById([...budgetMatches, ...sourcePlaces]);
 
   const styleMatches = budgetSource.filter((place) => getPlaceStyleScore(place, preferredStyles) > 0);
-  const mixedPlaces = styleMatches.length >= Math.min(count, 3) ? styleMatches : budgetSource;
+  const mixedPlaces =
+    styleMatches.length >= Math.min(count, 4)
+      ? styleMatches
+      : uniquePlacesById([...styleMatches, ...budgetSource]);
 
   if (!mixedPlaces.length) {
     return [];
@@ -253,10 +335,26 @@ const getPlaceDescription = (place) => {
   return `Khám phá ${place.name} trong lịch trình của bạn.`;
 };
 
+const parseDurationMinutes = (value, fallback) => {
+  const text = normalizeText(value);
+  const matches = text.match(/\d+/g);
+  if (!matches?.length) return fallback;
+
+  const numbers = matches.map(Number).filter(Number.isFinite);
+  if (!numbers.length) return fallback;
+
+  const average = numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
+  if (text.includes('ngay') || text.includes('dem')) return Math.round(average * 360);
+  if (text.includes('gio')) return Math.round(average * 60);
+  return Math.round(average);
+};
+
 const createPlaceActivity = ({
   place,
   preferredStyles,
   index,
+  dayIndex,
+  dailyCount,
   budgetPlan,
   durationDays,
   people,
@@ -268,24 +366,24 @@ const createPlaceActivity = ({
   const perDayActivityBudget = Math.floor(
     Number(budgetPlan.activitiesAndEntranceFees || 0) / days
   );
-  const perActivityBudget = Math.floor(perDayActivityBudget / 2);
+  const plannedFoodStops = preferredStyles.includes('FOOD')
+    ? Math.max(2, Math.ceil(dailyCount * 0.55))
+    : Math.min(2, dailyCount);
+  const plannedActivityStops = Math.max(dailyCount - plannedFoodStops, 1);
+  const perActivityBudget = Math.floor(perDayActivityBudget / plannedActivityStops);
   const perMealBudget = Math.floor(
-    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * 2, 1)
+    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * plannedFoodStops, 1)
   );
   const targetCost = category === 'FOOD' ? perMealBudget : perActivityBudget || perDayActivityBudget;
   const rawTotalCost =
     rawCostPerPerson === null || (category === 'FOOD' && rawCostPerPerson === 0)
       ? null
       : rawCostPerPerson * partySize;
-  const cost = targetCost
-    ? rawTotalCost === null
-      ? targetCost
-      : Math.min(rawTotalCost, targetCost)
-    : rawTotalCost || 0;
+  const cost = rawTotalCost === null ? targetCost : rawTotalCost;
 
   return {
     placeId: place._id?.toString(),
-    time: TIME_SLOTS[index] || '15:00',
+    time: getActivityTime({ dayIndex, index, dailyCount }),
     location: place.name,
     address: place.address || '',
     coordinates: place.coordinates,
@@ -293,7 +391,7 @@ const createPlaceActivity = ({
     cost: roundToNearest(cost, 10000),
     category,
     transport: index === 0 ? 'GRAB' : 'MOTORBIKE',
-    durationMinutes: category === 'FOOD' ? 60 : 90,
+    durationMinutes: parseDurationMinutes(place.duration, category === 'FOOD' ? 60 : 90),
   };
 };
 
@@ -312,9 +410,11 @@ const generateItinerary = async (
   const startDate = options.startDate || new Date().toISOString().split('T')[0];
   const people = Number(options.people || 1);
   const preferredStyles = getPreferredTravelStyles(options);
-  const activitiesPerDay = 3;
-  const neededPlaces = days * activitiesPerDay;
   const budgetPlan = getBudgetPlan(budget, days);
+  const dailyActivityCounts = Array.from({ length: days }, (_, dayIndex) =>
+    getDailyActivityCount({ dayIndex, budgetPlan, preferredStyles, people })
+  );
+  const neededPlaces = dailyActivityCounts.reduce((sum, count) => sum + count, 0);
   const places = await pickPlaces(
     destination,
     preferredStyles,
@@ -328,13 +428,13 @@ const generateItinerary = async (
     throw new Error(`Khong co dia diem nao trong bang places cho "${destination}".`);
   }
 
+  let placeCursor = 0;
   const itinerary = Array.from({ length: days }, (_, dayIndex) => {
     const date = new Date(startDate);
     date.setDate(date.getDate() + dayIndex);
-    const dayPlaces = places.slice(
-      dayIndex * activitiesPerDay,
-      dayIndex * activitiesPerDay + activitiesPerDay
-    );
+    const dailyCount = dailyActivityCounts[dayIndex] || 3;
+    const dayPlaces = places.slice(placeCursor, placeCursor + dailyCount);
+    placeCursor += dailyCount;
 
     return {
       day: dayIndex + 1,
@@ -346,6 +446,8 @@ const generateItinerary = async (
           place,
           preferredStyles,
           index,
+          dayIndex,
+          dailyCount,
           budgetPlan,
           durationDays: days,
           people,

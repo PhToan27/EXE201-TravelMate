@@ -106,17 +106,16 @@ const CreateTripScreen = ({ navigation }) => {
   const [endDateObj, setEndDateObj] = useState(defaultEnd);
   const [budget, setBudget] = useState('');
   const [people, setPeople] = useState('2');
-  const [travelStyles, setTravelStyles] = useState(['BEACH']); // Default select BEACH
+  const [travelStyles, setTravelStyles] = useState([]);
   const [errors, setErrors] = useState({});
 
   const toggleTravelStyle = (value) => {
     if (travelStyles.includes(value)) {
-      if (travelStyles.length > 1) {
-        setTravelStyles(travelStyles.filter(style => style !== value));
-      }
+      setTravelStyles(travelStyles.filter(style => style !== value));
     } else {
       setTravelStyles([...travelStyles, value]);
     }
+    setErrors((e) => ({ ...e, travelStyles: '' }));
   };
 
   // Picker modal state
@@ -153,6 +152,7 @@ const CreateTripScreen = ({ navigation }) => {
     const e = {};
     if (!destination.trim()) e.destination = 'Vui lòng nhập điểm đến';
     if (endDateObj <= startDateObj) e.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+    if (!travelStyles.length) e.travelStyles = 'Vui lòng chọn ít nhất một sở thích';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -294,6 +294,9 @@ const CreateTripScreen = ({ navigation }) => {
                 );
               })}
             </View>
+            {errors.travelStyles ? (
+              <Text style={styles.styleError}>{errors.travelStyles}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -410,6 +413,11 @@ const styles = StyleSheet.create({
   },
   styleChipLabelActive: {
     color: COLORS.primary,
+  },
+  styleError: {
+    marginTop: 8,
+    fontSize: 11,
+    color: COLORS.error,
   },
   createBtn: {
     marginTop: SPACING.sm,

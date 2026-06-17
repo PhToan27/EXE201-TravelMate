@@ -43,6 +43,9 @@ const sanitizePackingList = (packingList = {}) => ({
   updatedAt: new Date(),
 });
 
+const normalizeObjectId = (value) =>
+  value && mongoose.Types.ObjectId.isValid(value) ? value : undefined;
+
 /**
  * @desc    Create a new trip
  * @route   POST /api/trips
@@ -231,6 +234,7 @@ const createTrip = async (req, res) => {
               endTime: act.endTime || '',
               title: act.activityName || act.location || 'Hoạt động',
               description: act.description || '',
+              placeId: normalizeObjectId(act.placeId),
               category: (act.category || 'OTHER').toUpperCase(),
               locationName: act.location || 'N/A',
               address: act.address || '',
@@ -273,6 +277,7 @@ const createTrip = async (req, res) => {
       const parentDay = dayDocs.find(d => d._id.toString() === act.itineraryDayId.toString());
       return {
         _id: act._id,
+        placeId: act.placeId,
         day: parentDay ? parentDay.dayNumber : 1,
         time: act.time,
         endTime: act.endTime || '',
@@ -427,6 +432,7 @@ const getTripById = async (req, res) => {
     const dbActivities = await Activity.find({ tripId: trip._id });
     const activities = dbActivities.map(act => ({
       _id: act._id,
+      placeId: act.placeId,
       day: dayMap[act.itineraryDayId?.toString()] || 1,
       time: act.time,
       endTime: act.endTime || '',
@@ -587,7 +593,10 @@ const updateTrip = async (req, res) => {
               endTime: act.endTime || '',
               title: act.location || act.title || 'Hoạt động',
               description: act.description || '',
+              placeId: normalizeObjectId(act.placeId),
               category: (act.category || 'OTHER').toUpperCase(),
+              address: act.address || '',
+              location: act.coordinates || act.location,
               locationName: act.location || 'N/A',
               durationMinutes: act.durationMinutes || 60,
               transport: act.transport ? act.transport.toUpperCase() : undefined,
@@ -605,7 +614,10 @@ const updateTrip = async (req, res) => {
             endTime: act.endTime || '',
             title: act.location || act.title || 'Hoạt động',
             description: act.description || '',
+            placeId: normalizeObjectId(act.placeId),
             category: (act.category || 'OTHER').toUpperCase(),
+            address: act.address || '',
+            location: act.coordinates || act.location,
             locationName: act.location || 'N/A',
             durationMinutes: act.durationMinutes || 60,
             transport: act.transport ? act.transport.toUpperCase() : undefined,
@@ -651,6 +663,7 @@ const updateTrip = async (req, res) => {
 
     const formattedActivities = finalActivities.map(act => ({
       _id: act._id,
+      placeId: act.placeId,
       day: dayMap[act.itineraryDayId?.toString()] || 1,
       time: act.time,
       endTime: act.endTime || '',
@@ -892,6 +905,7 @@ const getSharedTrip = async (req, res) => {
     const dbActivities = await Activity.find({ tripId: trip._id });
     const activities = dbActivities.map(act => ({
       _id: act._id,
+      placeId: act.placeId,
       day: dayMap[act.itineraryDayId?.toString()] || 1,
       time: act.time,
       endTime: act.endTime || '',
