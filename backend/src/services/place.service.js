@@ -1,6 +1,40 @@
 const Place = require('../models/Place');
 
 const POPULAR_PLACES = {
+  'bánh tráng cuốn thịt heo trần': {
+    name: 'Bánh tráng cuốn thịt heo Trần',
+    category: 'Ẩm thực',
+    rating: 4.6,
+    reviewsCount: '1k+',
+    duration: '45 phút - 1 giờ',
+    difficulty: 'Dễ',
+    introduction:
+      'Bánh tráng cuốn thịt heo Trần là một địa chỉ đặc sản Đà Nẵng nổi tiếng, phù hợp để thưởng thức món bánh tráng cuốn thịt heo trong lịch trình ẩm thực.',
+    address: '4 Lê Duẩn, Hải Châu, Đà Nẵng',
+    openHours: '09:00 - 21:00 (Tham khảo)',
+    ticketPrice: 'Khoảng 70.000 - 165.000 VNĐ / người',
+    imageUrl:
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+    coordinates: { lat: 16.071657, lng: 108.222615 },
+  },
+
+  'mì quảng bà mua': {
+    name: 'Mì Quảng Bà Mua',
+    category: 'Ẩm thực',
+    rating: 4.5,
+    reviewsCount: '100+',
+    duration: '45 phút - 1 giờ',
+    difficulty: 'Dễ',
+    introduction:
+      'Mì Quảng Bà Mua là một quán mì Quảng quen thuộc ở Đà Nẵng, phù hợp để ghé ăn đặc sản địa phương trong lịch trình tham quan thành phố.',
+    address: '95A Nguyễn Tri Phương, Thanh Khê, Đà Nẵng',
+    openHours: '06:00 - 22:00 (Tham khảo)',
+    ticketPrice: 'Khoảng 30.000 - 70.000 VNĐ / tô',
+    imageUrl:
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+    coordinates: { lat: 16.0678, lng: 108.2039 },
+  },
+
   'ngũ hành sơn': {
     name: 'Ngũ Hành Sơn',
     category: 'Di tích quốc gia',
@@ -166,160 +200,57 @@ const generateDefaultPlaceData = (placeName) => {
   };
 };
 
-/**
- * Get details for a list of places in bulk.
- * @param {Array<string>} placeNames - Array of place names to resolve
- * @returns {Promise<Map<string, Object>>} Map of normalized original place names to their DB records
- */
-const getBulkPlacesDetails = async (placeNames) => {
-  if (!Array.isArray(placeNames) || placeNames.length === 0) {
-    return new Map();
-  }
+const savePlaceSafely = async (placeData) => {
+  try {
+    const existingPlace = await Place.findOne({
+      name: {
+        $regex: new RegExp(`^${escapeRegex(placeData.name)}$`, 'i'),
+      },
+    });
 
-  const cleanNames = [...new Set(placeNames.map(name => String(name || '').trim()).filter(Boolean))];
-  if (cleanNames.length === 0) {
-    return new Map();
-  }
-
-  // 1. Gather search targets for DB (including canonical names from the dictionary)
-  const dbSearchNames = new Set(cleanNames);
-  const nameToPopularMap = new Map();
-
-  for (const name of cleanNames) {
-    const norm = normalizeText(name);
-    const popular = findPopularPlace(name);
-    if (popular) {
-      dbSearchNames.add(popular.name);
-      nameToPopularMap.set(norm, popular);
-    }
-  }
-
-  // 2. Query MongoDB for existing records in ONE command
-  const regexList = Array.from(dbSearchNames).map(name => new RegExp(`^${escapeRegex(name)}$`, 'i'));
-  const existingPlaces = await Place.find({
-    name: { $in: regexList }
-  });
-
-  // Create lookup maps
-  const existingPlacesMap = new Map();
-  existingPlaces.forEach(p => {
-    existingPlacesMap.set(normalizeText(p.name), p);
-  });
-
-  const missingPlacesMap = new Map();
-  const resolvedMap = new Map();
-
-  // 3. Resolve each name
-  for (const name of cleanNames) {
-    const normName = normalizeText(name);
-
-    // Case A: Exists directly in DB by its original name
-    if (existingPlacesMap.has(normName)) {
-      resolvedMap.set(normName, existingPlacesMap.get(normName));
-      continue;
+    if (existingPlace) {
+      Object.assign(existingPlace, placeData);
+      return await existingPlace.save();
     }
 
-    // Case B: Matches popular place dictionary
-    const popular = nameToPopularMap.get(normName);
-    if (popular) {
-      const normPopularName = normalizeText(popular.name);
-      if (existingPlacesMap.has(normPopularName)) {
-        resolvedMap.set(normName, existingPlacesMap.get(normPopularName));
-      } else if (missingPlacesMap.has(normPopularName)) {
-        resolvedMap.set(normName, missingPlacesMap.get(normPopularName));
-      } else {
-        missingPlacesMap.set(normPopularName, popular);
-        resolvedMap.set(normName, popular);
-      }
-      continue;
-    }
-
-    // Case C: Fallback default
-    const fallback = generateDefaultPlaceData(name);
-    const normFallbackName = normalizeText(fallback.name);
-    if (existingPlacesMap.has(normFallbackName)) {
-      resolvedMap.set(normName, existingPlacesMap.get(normFallbackName));
-    } else if (missingPlacesMap.has(normFallbackName)) {
-      resolvedMap.set(normName, missingPlacesMap.get(normFallbackName));
-    } else {
-      missingPlacesMap.set(normFallbackName, fallback);
-      resolvedMap.set(normName, fallback);
-    }
+    return await Place.create(placeData);
+  } catch (error) {
+    console.error('Save place cache error:', error.message);
+    return placeData;
   }
-
-  // 4. Bulk insert missing places in ONE operation
-  if (missingPlacesMap.size > 0) {
-    try {
-      const toInsert = Array.from(missingPlacesMap.values());
-      // Sử dụng ordered: false để nếu trùng 1-2 địa điểm, những cái khác vẫn được insert bình thường
-      const insertedPlaces = await Place.insertMany(toInsert, { ordered: false });
-
-      // Cập nhật resolvedMap bằng Document chính thức từ DB (Đã có _id)
-      insertedPlaces.forEach(p => {
-        const normInsertedName = normalizeText(p.name);
-        for (const name of cleanNames) {
-          const normName = normalizeText(name);
-          const resVal = resolvedMap.get(normName);
-          if (resVal && normalizeText(resVal.name) === normInsertedName) {
-            resolvedMap.set(normName, p);
-          }
-        }
-      });
-    } catch (insertError) {
-      console.error('Bulk save place cache warning/error:', insertError.message);
-
-      // Trích xuất tất cả các docs đã được nạp thành công trước khi bị chặn bởi lỗi trùng lặp
-      const inserted = insertError.insertedDocs || (insertError.result && insertError.result.insertedDocs) || [];
-      inserted.forEach(p => {
-        const normInsertedName = normalizeText(p.name);
-        for (const name of cleanNames) {
-          const normName = normalizeText(name);
-          const resVal = resolvedMap.get(normName);
-          if (resVal && normalizeText(resVal.name) === normInsertedName) {
-            resolvedMap.set(normName, p);
-          }
-        }
-      });
-
-      // Đối với những địa điểm hoàn toàn thất bại không insert được, truy vấn nhanh lại để lấy _id sẵn có
-      const failedNames = Array.from(missingPlacesMap.keys());
-      const regexFailed = failedNames.map(n => new RegExp(`^${escapeRegex(n)}$`, 'i'));
-      const backupFetch = await Place.find({ name: { $in: regexFailed } }).lean();
-
-      backupFetch.forEach(p => {
-        const normB = normalizeText(p.name);
-        for (const name of cleanNames) {
-          const normName = normalizeText(name);
-          const resVal = resolvedMap.get(normName);
-          if (resVal && (normalizeText(resVal.name) === normB || normName === normB)) {
-            resolvedMap.set(normName, p);
-          }
-        }
-      });
-    }
-  }
-
-  // Đảm bảo LUÔN LUÔN trả về một Instance Map hợp lệ, không bao giờ null/undefined
-  return resolvedMap || new Map();
 };
 
-/**
- * Get place details by name (caches and uses static dictionary/fallbacks)
- * Wraps getBulkPlacesDetails to maintain backwards compatibility.
- * @param {string} placeName - Name of the place/destination
- * @returns {Promise<Object>} The resolved place document
- */
 const getPlaceDetails = async (placeName) => {
   if (!placeName || !String(placeName).trim()) {
     throw new Error('Tên địa điểm không được để trống');
   }
 
   const cleanName = String(placeName).trim();
-  const resultMap = await getBulkPlacesDetails([cleanName]);
-  return resultMap.get(normalizeText(cleanName)) || null;
+
+  const popularPlace = findPopularPlace(cleanName);
+
+  if (popularPlace) {
+    console.log(`Retrieved place "${cleanName}" from static dictionary.`);
+    return await savePlaceSafely(popularPlace);
+  }
+
+  const cachedPlace = await Place.findOne({
+    name: {
+      $regex: new RegExp(`^${escapeRegex(cleanName)}$`, 'i'),
+    },
+  });
+
+  if (cachedPlace) {
+    console.log(`Retrieved place "${cleanName}" from MongoDB cache.`);
+    return cachedPlace;
+  }
+
+  console.log(`Using fallback place template for "${cleanName}".`);
+
+  const fallbackPlace = generateDefaultPlaceData(cleanName);
+  return await savePlaceSafely(fallbackPlace);
 };
 
 module.exports = {
   getPlaceDetails,
-  getBulkPlacesDetails,
 };
