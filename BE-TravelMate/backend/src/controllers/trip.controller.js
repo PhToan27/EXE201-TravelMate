@@ -46,6 +46,16 @@ const sanitizePackingList = (packingList = {}) => ({
 const normalizeObjectId = (value) =>
   value && mongoose.Types.ObjectId.isValid(value) ? value : undefined;
 
+const normalizeCoordinateObject = (value) => {
+  if (!value) return undefined;
+
+  const lat = Number(value.lat ?? value.latitude);
+  const lng = Number(value.lng ?? value.longitude);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+  return { lat, lng };
+};
+
 /**
  * @desc    Create a new trip
  * @route   POST /api/trips
@@ -238,12 +248,7 @@ const createTrip = async (req, res) => {
               category: (act.category || 'OTHER').toUpperCase(),
               locationName: act.location || 'N/A',
               address: act.address || '',
-              location: act.coordinates
-                ? {
-                    lat: act.coordinates.lat,
-                    lng: act.coordinates.lng,
-                  }
-                : undefined,
+              location: normalizeCoordinateObject(act.coordinates),
               durationMinutes: act.durationMinutes || 60,
               transport: act.transport ? act.transport.toUpperCase() : undefined,
               estimatedCost: act.cost || act.estimatedCost || 0,
@@ -596,7 +601,7 @@ const updateTrip = async (req, res) => {
               placeId: normalizeObjectId(act.placeId),
               category: (act.category || 'OTHER').toUpperCase(),
               address: act.address || '',
-              location: act.coordinates || act.location,
+              location: normalizeCoordinateObject(act.coordinates || act.location),
               locationName: act.location || 'N/A',
               durationMinutes: act.durationMinutes || 60,
               transport: act.transport ? act.transport.toUpperCase() : undefined,
@@ -617,7 +622,7 @@ const updateTrip = async (req, res) => {
             placeId: normalizeObjectId(act.placeId),
             category: (act.category || 'OTHER').toUpperCase(),
             address: act.address || '',
-            location: act.coordinates || act.location,
+            location: normalizeCoordinateObject(act.coordinates || act.location),
             locationName: act.location || 'N/A',
             durationMinutes: act.durationMinutes || 60,
             transport: act.transport ? act.transport.toUpperCase() : undefined,

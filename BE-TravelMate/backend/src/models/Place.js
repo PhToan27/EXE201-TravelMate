@@ -57,6 +57,12 @@ const placeSchema = new mongoose.Schema(
         type: Number,
         default: 108.2022,
       },
+      latitude: {
+        type: Number,
+      },
+      longitude: {
+        type: Number,
+      },
     },
   },
   { timestamps: true }
