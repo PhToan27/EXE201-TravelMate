@@ -110,19 +110,7 @@ const TIME_SLOT_PATTERNS = [
   ['07:00', '09:00', '11:00', '13:00', '15:00', '17:00', '19:00'],
 ];
 
-const getDailyActivityCount = ({ budgetPlan, preferredStyles, people }) => {
-  const dailyBudget =
-    (Number(budgetPlan.foodAndBeverage || 0) +
-      Number(budgetPlan.activitiesAndEntranceFees || 0)) /
-    Math.max(Number(budgetPlan.days || 1), 1);
-  const perPersonDailyBudget = dailyBudget / Math.max(Number(people || 1), 1);
-
-  if (perPersonDailyBudget && perPersonDailyBudget < 180000) return randomInt(4, 5);
-  if (perPersonDailyBudget && perPersonDailyBudget < 350000) return randomInt(4, 5);
-  if (preferredStyles.includes('FOOD')) return randomInt(5, 7);
-  if (perPersonDailyBudget > 700000) return randomInt(5, 7);
-  return randomInt(4, 6);
-};
+const getDailyActivityCount = () => randomInt(6, 8);
 
 const shiftTime = (time, minutes) => {
   const [hour, minute] = String(time || '08:00').split(':').map(Number);
@@ -278,7 +266,6 @@ const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays
         getActivityCategory(place, preferredStyles) === 'FOOD'
           ? 6
           : 0) +
-        Number(place.rating || 4) / 5 +
         Math.random() * 4,
     }))
     .sort((a, b) => b.score - a.score)
@@ -526,7 +513,7 @@ const generateItinerary = async (
   const preferredStyles = getPreferredTravelStyles(options);
   const budgetPlan = getBudgetPlan(budget, days);
   const dailyActivityCounts = Array.from({ length: days }, (_, dayIndex) =>
-    getDailyActivityCount({ dayIndex, budgetPlan, preferredStyles, people })
+    getDailyActivityCount()
   );
   const neededPlaces = dailyActivityCounts.reduce((sum, count) => sum + count, 0);
   const places = await pickPlaces(
