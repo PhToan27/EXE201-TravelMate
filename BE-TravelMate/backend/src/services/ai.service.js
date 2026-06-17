@@ -1,4 +1,3 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
 const ItineraryCache = require('../models/ItineraryCache');
 const ItineraryTemplate = require('../models/ItineraryTemplate');
@@ -292,6 +291,15 @@ const buildPrompt = ({
   interests,
   hotelArea,
 }) => {
+  // Đa dạng hóa / Cá nhân hóa bằng cách chọn ngẫu nhiên góc tiếp cận lịch trình ngầm
+  const approaches = [
+    'Ưu tiên khám phá ẩm thực đường phố đặc sắc và nhịp sống sôi động về đêm.',
+    'Ưu tiên lịch trình di chuyển thư thái, tối ưu hóa thời gian nghỉ ngơi và chọn các điểm gần nhau.',
+    'Ưu tiên các hoạt động tìm hiểu văn hóa địa phương, lịch sử và check-in chụp ảnh cảnh quan đẹp.',
+    'Ưu tiên các trải nghiệm khám phá thiên nhiên hoang sơ, hoạt động ngoài trời năng động và phiêu lưu.'
+  ];
+  const randomApproach = approaches[Math.floor(Math.random() * approaches.length)];
+
   return `
 Return ONLY valid JSON. No markdown. No explanation.
 
@@ -311,6 +319,7 @@ budgetVND=${budget}
 style=${travelStyle}
 interests=${interests}
 hotelArea=${hotelArea}
+focusApproach=${randomApproach}
 
 Rules:
 - Exactly ${durationDays} days.
@@ -321,6 +330,7 @@ Rules:
 - Use these categories only: FOOD, PLACE, HOTEL, TRANSPORT, REST, SHOPPING, OTHER.
 - Use these transports only: WALKING, BIKE, MOTORBIKE, CAR, BUS, TAXI, GRAB, OTHER.
 - Keep descriptions short, max 20 words.
+- Specific itinerary focus direction: ${randomApproach}
 
 JSON shape:
 {
@@ -362,6 +372,72 @@ JSON shape:
 `;
 };
 
+/**
+ * Helper to enrich the final itinerary with details of each place in bulk.
+ * @param {Object} result - The itinerary result object containing `itinerary`
+ * @returns {Promise<Object>} The enriched itinerary result object
+ */
+const enrichResultWithPlaceDetails = async (result) => {
+  if (!result || !Array.isArray(result.itinerary)) {
+    return result;
+  }
+
+  const activities = result.itinerary.flatMap((day) => day.activities || []);
+
+  // Check if enrichment is actually needed (at least one activity has a location but lacks placeDetails)
+  const needsEnrichment = activities.some((act) => act.location && !act.placeDetails);
+  if (!needsEnrichment) {
+    return result;
+  }
+
+  const locationNames = activities.map((act) => act.location).filter(Boolean);
+  if (locationNames.length === 0) {
+    return result;
+  }
+
+  try {
+    const placeService = require('./place.service');
+    const detailsMap = await placeService.getBulkPlacesDetails(locationNames);
+    // Kiểm tra phòng vệ: Nếu detailsMap không phải là Map chuẩn (do lỗi import hoặc lỗi logic tầng dưới)
+    if (!detailsMap || typeof detailsMap.get !== 'function') {
+      console.error('detailsMap returned from placeService is invalid.');
+      return result;
+    }
+    result.itinerary.forEach((day) => {
+      if (Array.isArray(day.activities)) {
+        day.activities.forEach((act) => {
+          if (act.location) {
+            const cleanLoc = act.location.toLowerCase().trim().normalize('NFC');
+            const details = detailsMap.get(cleanLoc);
+            if (details) {
+              act.placeDetails = {
+                name: details.name,
+                category: details.category,
+                rating: details.rating,
+                reviewsCount: details.reviewsCount,
+                duration: details.duration,
+                difficulty: details.difficulty,
+                introduction: details.introduction,
+                address: details.address,
+                openHours: details.openHours,
+                ticketPrice: details.ticketPrice,
+                imageUrl: details.imageUrl,
+                coordinates: details.coordinates,
+              };
+              act.address = details.address;
+              act.coordinates = details.coordinates;
+            }
+          }
+        });
+      }
+    });
+  } catch (err) {
+    console.error('Failed to enrich itinerary with place details:', err.message);
+  }
+
+  return result;
+};
+
 const generateItinerary = async (
   destination,
   durationDays,
@@ -379,6 +455,7 @@ const generateItinerary = async (
     throw new Error('Free AI plan only supports maximum 5 days per itinerary');
   }
 
+  // 1. Check template cache first
   const templateResult = await findTemplateItinerary(
     destination,
     durationDays,
@@ -388,15 +465,16 @@ const generateItinerary = async (
   );
 
   if (templateResult) {
-    return templateResult;
+    return await enrichResultWithPlaceDetails(templateResult);
   }
 
-  const useGemini = process.env.USE_GEMINI === 'true';
-  const apiKey = useGemini ? process.env.GEMINI_API_KEY : null;
+  // Lấy API Key của Groq
+  const apiKey = process.env.GROQ_API_KEY || null;
 
   if (!apiKey) {
-    console.warn('Missing GEMINI_API_KEY. Using mock itinerary.');
-    return generateMockItinerary(destination, durationDays, budget, preferences, options);
+    console.warn('Missing GROQ_API_KEY. Using mock itinerary.');
+    const mockRes = generateMockItinerary(destination, durationDays, budget, preferences, options);
+    return await enrichResultWithPlaceDetails(mockRes);
   }
 
   const startDate = options.startDate || new Date().toISOString().split('T')[0];
@@ -424,21 +502,12 @@ const generateItinerary = async (
 
   if (cachedItinerary) {
     console.log('Returning itinerary from MongoDB cache.');
-    memoryCache.set(cacheKey, cachedItinerary.result);
-    return cachedItinerary.result;
+    const enriched = await enrichResultWithPlaceDetails(cachedItinerary.result);
+    memoryCache.set(cacheKey, enriched);
+    return enriched;
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite',
-
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-      maxOutputTokens: 1800,
-    },
-  });
+  const modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
   const prompt = buildPrompt({
     destination,
@@ -453,16 +522,52 @@ const generateItinerary = async (
   });
 
   const maxRetries = 1;
+  let finalResult = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`Generating itinerary with Gemini. Attempt ${attempt + 1}`);
+      console.log(`Generating itinerary with Groq (${modelName}). Attempt ${attempt + 1}`);
 
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
+      // Thực hiện gọi API Groq bằng hàm fetch bản địa (Native Fetch)
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a professional travel planner assistant. Always respond in valid JSON format matching the requested schema.',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.85, // Tạo ra kết quả đa dạng, tránh trùng lặp
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Groq API returned status ${response.status}: ${errText}`);
+      }
+
+      const responseData = await response.json();
+
+      if (responseData.usage) {
+        const { prompt_tokens, completion_tokens, total_tokens } = responseData.usage;
+        console.log(`[Groq Token Usage] Model: ${modelName} | Prompt: ${prompt_tokens} | Completion: ${completion_tokens} | Total: ${total_tokens}`);
+      }
+
+      const responseText = responseData.choices[0].message.content;
       const aiResult = safeJsonParse(responseText);
 
-      const finalResult = {
+      finalResult = {
         ...aiResult,
         destination,
         startDate,
@@ -479,6 +584,11 @@ const generateItinerary = async (
         budget,
         durationDays
       );
+
+      finalResult = fitResultToBudget(finalResult, budget, durationDays);
+
+      // Làm giàu dữ liệu địa điểm trước khi cache
+      finalResult = await enrichResultWithPlaceDetails(finalResult);
 
       memoryCache.set(cacheKey, finalResult);
       await ItineraryCache.findOneAndUpdate(
@@ -507,55 +617,48 @@ const generateItinerary = async (
 
       return finalResult;
     } catch (error) {
-      const status = error?.status || error?.response?.status;
       const message = error?.message || '';
-
-      console.error('Gemini generation error:', message);
+      console.error('Groq generation error:', message);
 
       const isQuotaError =
-        status === 429 ||
+        message.includes('429') ||
         message.includes('Too Many Requests') ||
-        message.includes('quota');
+        message.includes('quota') ||
+        message.includes('rate_limit');
 
       if (isQuotaError) {
-        console.warn('Gemini quota/rate limit reached. Returning mock itinerary without retry.');
-        return generateMockItinerary(
+        console.warn('Groq quota/rate limit reached. Returning mock itinerary without retry.');
+        const mockRes = generateMockItinerary(
           destination,
           durationDays,
           budget,
           preferences,
           options
         );
+        return await enrichResultWithPlaceDetails(mockRes);
       }
 
       const isRetryable =
-        status === 503 ||
+        message.includes('503') ||
         message.includes('high demand') ||
         message.includes('Service Unavailable');
 
       if (isRetryable && attempt < maxRetries) {
-        const retryDelayMatch = message.match(/retryDelay":"(\d+)s"/);
-        const retryInMatch = message.match(/retry in ([\d.]+)s/i);
-
-        const delay = retryDelayMatch
-          ? Number(retryDelayMatch[1]) * 1000
-          : retryInMatch
-            ? Math.ceil(Number(retryInMatch[1])) * 1000
-            : 5000 * (attempt + 1);
-
-        console.log(`Retrying Gemini after ${delay}ms...`);
+        const delay = 5000 * (attempt + 1);
+        console.log(`Retrying Groq after ${delay}ms...`);
         await sleep(delay);
         continue;
       }
 
-      console.warn('Gemini failed. Returning mock itinerary.');
-      return generateMockItinerary(
+      console.warn('Groq failed. Returning mock itinerary.');
+      const mockRes = generateMockItinerary(
         destination,
         durationDays,
         budget,
         preferences,
         options
       );
+      return await enrichResultWithPlaceDetails(mockRes);
     }
   }
 };
@@ -596,8 +699,7 @@ const generateMockItinerary = (
         {
           time: '09:30',
           location: `Điểm tham quan nổi bật ở ${destination}`,
-          description: `Tham quan theo sở thích: ${preferences.join(', ') || 'ngắm cảnh'
-            }.`,
+          description: `Tham quan theo sở thích: ${preferences.join(', ') || 'ngắm cảnh'}.`,
           cost: Math.round((budget * 0.08) / durationDays),
           category: 'PLACE',
           transport: 'GRAB',
