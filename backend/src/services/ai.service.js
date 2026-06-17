@@ -195,15 +195,25 @@ const isDestinationMatch = (place, destination) => {
   return text.includes(destinationText) || destinationText.includes('da nang');
 };
 
+const toCoordinatePoint = (latitude, longitude) => {
+  const point = { lat: Number(latitude), lng: Number(longitude) };
+  return Number.isFinite(point.lat) && Number.isFinite(point.lng) ? point : null;
+};
+
 const hasUsableCoordinates = (place) => {
-  const lat = Number(place?.coordinates?.lat);
-  const lng = Number(place?.coordinates?.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const coordinates = place?.coordinates || {};
+  const candidates = [
+    toCoordinatePoint(coordinates.latitude, coordinates.longitude),
+    toCoordinatePoint(coordinates.lat, coordinates.lng),
+    toCoordinatePoint(place?.latitude, place?.longitude),
+  ].filter(Boolean);
 
   // Mongo schema default / Da Nang center fallback, not a real place coordinate.
-  const isDefaultDaNangCenter =
-    Math.abs(lat - 16.0544) < 0.0002 && Math.abs(lng - 108.2022) < 0.0002;
-  return !isDefaultDaNangCenter;
+  return candidates.some(
+    (point) =>
+      Math.abs(point.lat - 16.0544) >= 0.0002 ||
+      Math.abs(point.lng - 108.2022) >= 0.0002
+  );
 };
 
 const getBudgetTargetForPlace = (place, preferredStyles, budgetPlan, durationDays) => {

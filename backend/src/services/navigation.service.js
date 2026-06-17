@@ -3,14 +3,21 @@ const isDefaultDaNangCoordinate = (point) =>
   Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
   Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
 
+const toCoordinatePoint = (latitude, longitude) => {
+  const point = { latitude: Number(latitude), longitude: Number(longitude) };
+  return Number.isFinite(point.latitude) && Number.isFinite(point.longitude) ? point : null;
+};
+
 const getUsablePlaceCoordinate = (place) => {
-  const latitude = Number(place?.coordinates?.lat);
-  const longitude = Number(place?.coordinates?.lng);
+  const placeObject = typeof place?.toObject === 'function' ? place.toObject() : place;
+  const coordinates = placeObject?.coordinates || {};
+  const candidates = [
+    toCoordinatePoint(coordinates.latitude, coordinates.longitude),
+    toCoordinatePoint(coordinates.lat, coordinates.lng),
+    toCoordinatePoint(placeObject?.latitude, placeObject?.longitude),
+  ].filter(Boolean);
 
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-
-  const point = { latitude, longitude };
-  return isDefaultDaNangCoordinate(point) ? null : point;
+  return candidates.find((point) => !isDefaultDaNangCoordinate(point)) || null;
 };
 
 const hasValidCoordinate = (point) =>
