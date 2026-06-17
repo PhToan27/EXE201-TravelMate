@@ -31,6 +31,7 @@ const CustomInput = ({
   editable = true,
   onFocus,
   onBlur,
+  rightText,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -90,6 +91,9 @@ const CustomInput = ({
             />
           </TouchableOpacity>
         )}
+        {!!rightText && !secureTextEntry && (
+          <Text style={styles.rightText}>{rightText}</Text>
+        )}
       </TouchableOpacity>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
@@ -145,6 +149,12 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 4,
     marginLeft: SPACING.sm,
+  },
+  rightText: {
+    marginLeft: SPACING.sm,
+    fontSize: FONTS.sizes.md,
+    color: COLORS.gray[500],
+    fontWeight: '700',
   },
   error: {
     fontSize: FONTS.sizes.xs,

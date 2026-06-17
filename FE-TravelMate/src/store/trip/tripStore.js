@@ -1,6 +1,21 @@
 import { create } from 'zustand';
 import * as tripApi from '../../services/trip/tripApi';
 
+const getApiErrorMessage = (error, fallback) => {
+  const status = error.response?.status;
+  const serverMessage =
+    error.response?.data?.message ||
+    error.response?.data?.error ||
+    error.response?.data?.details;
+  const timeoutMessage =
+    error.code === 'ECONNABORTED'
+      ? 'API phản hồi quá lâu, có thể Render đang khởi động hoặc tạo lịch trình quá lâu.'
+      : '';
+  const message = serverMessage || timeoutMessage || error.message || fallback;
+
+  return status ? `${message} (HTTP ${status})` : message;
+};
+
 const useTripStore = create((set, get) => ({
   // State
   trips: [],
@@ -62,8 +77,15 @@ const useTripStore = create((set, get) => ({
       return { success: false, message: result.message };
     } catch (error) {
       const message = error.response?.data?.message || 'Lỗi tạo chuyến đi';
-      set({ isCreating: false, error: message });
-      return { success: false, message };
+      console.error('Create trip error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code,
+      });
+      const detailedMessage = getApiErrorMessage(error, message);
+      set({ isCreating: false, error: detailedMessage });
+      return { success: false, message: detailedMessage };
     }
   },
 

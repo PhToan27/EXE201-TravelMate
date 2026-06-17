@@ -18,6 +18,7 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import PlaceDetailScreen from '../screens/trip/PlaceDetailScreen';
 import RouteMapScreen from '../screens/trip/RouteMapScreen';
+import NavigationDetailScreen from '../screens/trip/NavigationDetailScreen';
 import CommunityScreen from '../screens/community/CommunityScreen';
 import PostDetailScreen from '../screens/community/PostDetailScreen';
 import MyPostsScreen from '../screens/community/MyPostsScreen';
@@ -45,6 +46,7 @@ const RootStack = () => (
     <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="RouteMap" component={RouteMapScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="NavigationDetail" component={NavigationDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="MyPosts" component={MyPostsScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />

@@ -4,7 +4,12 @@
 
 
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL;
+  (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://exe201-travelmate.onrender.com/api').trim();
+
+export const VIETMAP_API_KEY =
+  (process.env.EXPO_PUBLIC_VIETMAP_API_KEY ||
+    process.env.VIETMAP_API_KEY ||
+    '0844f00dde697a7f30f357342d70bcea7018bc398bdec943').trim();
 // 2. Dành cho iOS Simulator hoặc Web:
 // export const API_BASE_URL = 'http://127.0.0.1:5000/api';
 // 3. Dành cho điện thoại thật (quét QR code bằng Expo Go):

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,12 @@ import * as postApi from '../../services/community/postApi';
 import { COLORS, RADIUS, SPACING } from '../../utils/constants';
 
 const tabs = ['Mới nhất', 'Xu hướng', 'Theo dõi', 'Thách thức'];
+const feedMap = {
+  'Mới nhất': 'latest',
+  'Xu hướng': 'trending',
+  'Theo dõi': 'following',
+  'Thách thức': 'challenge',
+};
 
 const CommunityScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -32,10 +38,12 @@ const CommunityScreen = ({ navigation }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', category: 'Mới nhất', image: null });
 
-  const fetchPosts = useCallback(async (refreshing = false) => {
+  const canManageChallenges = ['admin', 'moderator'].includes(user?.role);
+
+  const fetchPosts = useCallback(async (refreshing = false, feed = 'latest') => {
     refreshing ? setIsRefreshing(true) : setIsLoading(true);
     try {
-      const result = await postApi.getPosts();
+      const result = await postApi.getPosts(feed === 'latest' ? {} : { feed });
       if (result.success) {
         setPosts(result.data || []);
       }
@@ -48,8 +56,8 @@ const CommunityScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+    fetchPosts(false, feedMap[activeTab] || 'latest');
+  }, [fetchPosts, activeTab]);
 
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -89,7 +97,7 @@ const CommunityScreen = ({ navigation }) => {
         setForm({ title: '', content: '', category: 'Mới nhất', image: null });
         setIsComposerOpen(false);
         Alert.alert('Đã gửi bài', result.message || 'Bài viết của bạn đang được phê duyệt');
-        fetchPosts(true);
+        fetchPosts(true, feedMap[activeTab] || 'latest');
       }
     } catch (error) {
       Alert.alert('Chưa đăng được bài', error.response?.data?.message || 'Kiểm tra Cloudinary/env rồi thử lại.');
@@ -97,8 +105,6 @@ const CommunityScreen = ({ navigation }) => {
       setIsSubmitting(false);
     }
   };
-
-  const visiblePosts = posts.filter((post) => activeTab === 'Mới nhất' || post.category === activeTab);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -116,7 +122,7 @@ const CommunityScreen = ({ navigation }) => {
           <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Notifications')}>
             <Ionicons name="notifications-outline" size={22} color={COLORS.black} />
           </TouchableOpacity>
-          {['admin', 'moderator'].includes(user?.role) && (
+          {canManageChallenges && (
             <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('AdminModeration')}>
               <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
             </TouchableOpacity>
@@ -144,17 +150,24 @@ const CommunityScreen = ({ navigation }) => {
           contentContainerStyle={[styles.feed, { paddingBottom: insets.bottom + SPACING.xl }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchPosts(true)} colors={[COLORS.primary]} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchPosts(true, feedMap[activeTab] || 'latest')} colors={[COLORS.primary]} />
           }
         >
-          {visiblePosts.map((post) => (
-            <PostCard
-              key={post._id}
-              post={post}
-              onPress={() => navigation.navigate('PostDetail', { postId: post._id, post })}
-              onAuthorPress={() => navigation.navigate('UserProfile', { userId: post.author?._id })}
-            />
-          ))}
+          {posts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubble-ellipses-outline" size={32} color={COLORS.gray[400]} />
+              <Text style={styles.emptyText}>Chưa có bài viết nào ở mục này.</Text>
+            </View>
+          ) : (
+            posts.map((post) => (
+              <PostCard
+                key={post._id}
+                post={post}
+                onPress={() => navigation.navigate('PostDetail', { postId: post._id, post })}
+                onAuthorPress={() => navigation.navigate('UserProfile', { userId: post.author?._id })}
+              />
+            ))
+          )}
         </ScrollView>
       )}
 
@@ -176,7 +189,7 @@ const CommunityScreen = ({ navigation }) => {
             ) : (
               <View style={styles.imagePickerEmpty}>
                 <Ionicons name="image-outline" size={30} color={COLORS.primary} />
-                <Text style={styles.imagePickerText}>Chọn ảnh từ máy/điện thoại</Text>
+                <Text style={styles.imagePickerText}>Chọn ảnh từ máy</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -212,7 +225,6 @@ const PostCard = ({ post, onPress, onAuthorPress }) => (
       </View>
       <View>
         <Text style={styles.authorName}>{post.author?.name || 'TravelMate User'}</Text>
-        <Text style={styles.meta}>{post.readTime || '3 phút đọc'}</Text>
       </View>
     </TouchableOpacity>
     <Text style={styles.cardTitle}>{post.title}</Text>
@@ -270,6 +282,15 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.primary },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   feed: { padding: SPACING.md, gap: SPACING.md },
+  emptyState: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  emptyText: { color: COLORS.gray[500], fontWeight: '600' },
   card: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,
@@ -291,7 +312,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   authorName: { fontSize: 12, fontWeight: '700', color: COLORS.black },
-  meta: { fontSize: 10, color: COLORS.gray[500], marginTop: 1 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: COLORS.black, marginTop: SPACING.sm },
   excerpt: { fontSize: 12, color: COLORS.gray[600], lineHeight: 18, marginTop: 4 },
   cardFooter: {
