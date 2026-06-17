@@ -455,18 +455,18 @@ const generateItinerary = async (
     throw new Error('Free AI plan only supports maximum 5 days per itinerary');
   }
 
-  // 1. Check template cache first
-  const templateResult = await findTemplateItinerary(
-    destination,
-    durationDays,
-    budget,
-    preferences,
-    options
-  );
+  // // 1. Check template cache first
+  // const templateResult = await findTemplateItinerary(
+  //   destination,
+  //   durationDays,
+  //   budget,
+  //   preferences,
+  //   options
+  // );
 
-  if (templateResult) {
-    return await enrichResultWithPlaceDetails(templateResult);
-  }
+  // if (templateResult) {
+  //   return await enrichResultWithPlaceDetails(templateResult);
+  // }
 
   // Lấy API Key của Groq
   const apiKey = process.env.GROQ_API_KEY || null;
