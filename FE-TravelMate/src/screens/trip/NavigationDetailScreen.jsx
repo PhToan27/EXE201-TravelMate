@@ -339,6 +339,15 @@ const buildLocalRoute = (place, originPoint, vehicle, reason = '') => {
   };
 };
 
+const tryBuildLocalRoute = ({ place, originPoint, vehicle, reason, onSuccess }) => {
+  try {
+    onSuccess(buildLocalRoute(place, originPoint, vehicle, reason));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const withTimeout = (promise, timeoutMs, message) =>
   Promise.race([
     promise,
@@ -436,7 +445,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         fallbackOrigin = currentOrigin;
         setOrigin(currentOrigin);
 
-        if (!placeId && initialPlace) {
+        if (initialPlace) {
           try {
             const clientRoute = await fetchClientVietMapRoute({
               place: initialPlace,
@@ -444,10 +453,23 @@ const NavigationDetailScreen = ({ route, navigation }) => {
               vehicle,
             });
             setRouteData(clientRoute);
+            return;
           } catch (clientError) {
-            setRouteData(buildLocalRoute(initialPlace, currentOrigin, vehicle, clientError.message));
+            if (!placeId) {
+              const hasLocalRoute = tryBuildLocalRoute({
+                place: initialPlace,
+                originPoint: currentOrigin,
+                vehicle,
+                reason: clientError.message,
+                onSuccess: setRouteData,
+              });
+
+              if (!hasLocalRoute) {
+                setErrorMessage(clientError.message || 'Khong the lay du lieu dan duong.');
+              }
+              return;
+            }
           }
-          return;
         }
 
         const response = await getNavigationToPlace(placeId, {
@@ -467,7 +489,17 @@ const NavigationDetailScreen = ({ route, navigation }) => {
               });
               setRouteData(clientRoute);
             } catch {
-              setRouteData(buildLocalRoute(initialPlace, currentOrigin, vehicle, response.message));
+              const hasLocalRoute = tryBuildLocalRoute({
+                place: initialPlace,
+                originPoint: currentOrigin,
+                vehicle,
+                reason: response.message,
+                onSuccess: setRouteData,
+              });
+
+              if (!hasLocalRoute) {
+                setErrorMessage(response.message || 'Khong the lay du lieu dan duong.');
+              }
             }
             return;
           }
@@ -525,7 +557,17 @@ const NavigationDetailScreen = ({ route, navigation }) => {
             });
             setRouteData(clientRoute);
           } catch {
-            setRouteData(buildLocalRoute(initialPlace, fallbackOrigin, vehicle, message));
+            const hasLocalRoute = tryBuildLocalRoute({
+              place: initialPlace,
+              originPoint: fallbackOrigin,
+              vehicle,
+              reason: message,
+              onSuccess: setRouteData,
+            });
+
+            if (!hasLocalRoute) {
+              setErrorMessage(message);
+            }
           }
           return;
         }
