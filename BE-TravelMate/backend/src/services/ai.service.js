@@ -273,7 +273,11 @@ const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays
       score:
         getPlaceStyleScore(place, preferredStyles) +
         getPlaceBudgetScore(place, preferredStyles, budgetPlan, durationDays, people) +
-        (preferredStyles.includes('FOOD') && getActivityCategory(place, preferredStyles) === 'FOOD' ? 6 : 0) +
+        (preferredStyles.length === 1 &&
+        preferredStyles.includes('FOOD') &&
+        getActivityCategory(place, preferredStyles) === 'FOOD'
+          ? 6
+          : 0) +
         Number(place.rating || 4) / 5 +
         Math.random() * 4,
     }))
@@ -317,17 +321,26 @@ const pickPlaces = async (destination, preferredStyles, count, budgetPlan, durat
     return [];
   }
 
-  const picked = [];
-  let pool = shuffleWeightedPlaces(mixedPlaces, preferredStyles, budgetPlan, durationDays, people);
+  const weightedMixedPlaces = shuffleWeightedPlaces(
+    mixedPlaces,
+    preferredStyles,
+    budgetPlan,
+    durationDays,
+    people
+  );
+  const maxCandidateCount = Math.max(count * 3, count + 10);
+  const nonFoodCandidates = weightedMixedPlaces.filter(
+    (place) => getActivityCategory(place, preferredStyles) !== 'FOOD'
+  );
+  const foodCandidates = weightedMixedPlaces.filter(
+    (place) => getActivityCategory(place, preferredStyles) === 'FOOD'
+  );
 
-  while (picked.length < count) {
-    if (!pool.length) {
-      pool = shuffleWeightedPlaces(mixedPlaces, preferredStyles, budgetPlan, durationDays, people);
-    }
-    picked.push(pool.shift());
-  }
-
-  return picked;
+  return uniquePlacesById([
+    ...nonFoodCandidates.slice(0, maxCandidateCount),
+    ...foodCandidates.slice(0, maxCandidateCount),
+    ...weightedMixedPlaces.slice(0, maxCandidateCount),
+  ]);
 };
 
 const getActivityCategory = (place, preferredStyles) => {
