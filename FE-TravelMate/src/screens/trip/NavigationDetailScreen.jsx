@@ -608,6 +608,24 @@ const NavigationDetailScreen = ({ route, navigation }) => {
     );
   }
 
+  if (!routeData?.place) {
+    return (
+      <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
+        <Ionicons name="map-outline" size={56} color={COLORS.gray[400]} />
+        <Text style={styles.errorTitle}>{placeName || 'Dẫn đường'}</Text>
+        <Text style={styles.errorText}>Chưa có dữ liệu dẫn đường cho địa điểm này.</Text>
+        <View style={styles.errorActions}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.secondaryButtonText}>Quay lại</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleRetry}>
+            <Text style={styles.primaryButtonText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   const openingMessage = routeData?.openingStatus?.message || 'Chưa có dữ liệu giờ mở cửa';
   const trafficMessage = formatTraffic(routeData?.trafficLevel);
 
