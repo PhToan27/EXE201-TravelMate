@@ -295,10 +295,23 @@ const pickPlaces = async (destination, preferredStyles, count, budgetPlan, durat
       : uniquePlacesById([...budgetMatches, ...sourcePlaces]);
 
   const styleMatches = budgetSource.filter((place) => getPlaceStyleScore(place, preferredStyles) > 0);
-  const mixedPlaces =
+  let mixedPlaces =
     styleMatches.length >= Math.min(count, 4)
       ? styleMatches
       : uniquePlacesById([...styleMatches, ...budgetSource]);
+  const needsNonFoodMix = getNonFoodStyles(preferredStyles).length > 0;
+  const nonFoodMatches = mixedPlaces.filter(
+    (place) => getActivityCategory(place, preferredStyles) !== 'FOOD'
+  );
+
+  if (needsNonFoodMix && nonFoodMatches.length < Math.min(3, count - 1)) {
+    mixedPlaces = uniquePlacesById([
+      ...nonFoodMatches,
+      ...budgetSource.filter((place) => getActivityCategory(place, preferredStyles) !== 'FOOD'),
+      ...mixedPlaces,
+      ...budgetSource,
+    ]);
+  }
 
   if (!mixedPlaces.length) {
     return [];
@@ -329,6 +342,90 @@ const getActivityCategory = (place, preferredStyles) => {
   return STYLE_CATEGORY[matchedStyle] || 'PLACE';
 };
 
+const getPlaceKey = (place) => place?._id?.toString() || place?.name;
+
+const getNonFoodStyles = (preferredStyles) =>
+  preferredStyles.filter((style) => style !== 'FOOD');
+
+const pickFromPool = (pool, usedKeys) => {
+  if (!pool.length) return null;
+
+  let index = pool.findIndex((place) => !usedKeys.has(getPlaceKey(place)));
+  if (index < 0) index = 0;
+
+  const [picked] = pool.splice(index, 1);
+  const key = getPlaceKey(picked);
+  if (key) usedKeys.add(key);
+  return picked;
+};
+
+const buildDayStyleSlots = (preferredStyles, dailyCount, dayIndex) => {
+  const nonFoodStyles = getNonFoodStyles(preferredStyles);
+  const hasFood = preferredStyles.includes('FOOD');
+
+  if (!hasFood) {
+    return Array.from(
+      { length: dailyCount },
+      (_, index) => nonFoodStyles[(index + dayIndex) % Math.max(nonFoodStyles.length, 1)] || 'OTHER'
+    );
+  }
+
+  const maxFoodStops = nonFoodStyles.length
+    ? Math.max(1, Math.min(Math.ceil(dailyCount * 0.4), dailyCount - 1))
+    : Math.max(2, Math.min(Math.ceil(dailyCount * 0.55), dailyCount - 1));
+  let foodStops = 0;
+  let nonFoodCursor = dayIndex;
+
+  return Array.from({ length: dailyCount }, (_, index) => {
+    const remainingSlots = dailyCount - index;
+    const remainingFood = maxFoodStops - foodStops;
+    const shouldUseFood =
+      remainingFood > 0 && (index === 1 || index === 3 || remainingSlots <= remainingFood);
+
+    if (shouldUseFood) {
+      foodStops += 1;
+      return 'FOOD';
+    }
+
+    const style = nonFoodStyles[nonFoodCursor % Math.max(nonFoodStyles.length, 1)] || 'OTHER';
+    nonFoodCursor += 1;
+    return style;
+  });
+};
+
+const pickDayPlaces = ({ places, preferredStyles, dailyCount, dayIndex, usedKeys }) => {
+  const shuffled = shuffleWeightedPlaces(
+    places,
+    preferredStyles,
+    { days: 1, foodAndBeverage: 0, activitiesAndEntranceFees: 0 },
+    1,
+    1
+  );
+  const pools = {
+    FOOD: shuffled.filter((place) => getActivityCategory(place, preferredStyles) === 'FOOD'),
+    OTHER: shuffled.filter((place) => getActivityCategory(place, preferredStyles) !== 'FOOD'),
+  };
+
+  getNonFoodStyles(preferredStyles).forEach((style) => {
+    pools[style] = shuffled.filter(
+      (place) =>
+        getActivityCategory(place, preferredStyles) !== 'FOOD' &&
+        getPlaceStyleScore(place, [style]) > 0
+    );
+  });
+
+  return buildDayStyleSlots(preferredStyles, dailyCount, dayIndex)
+    .map((slot) => {
+      const fallbackPool = slot === 'FOOD' ? pools.OTHER : pools.OTHER;
+      return (
+        pickFromPool(pools[slot] || [], usedKeys) ||
+        pickFromPool(fallbackPool, usedKeys) ||
+        pickFromPool(shuffled, usedKeys)
+      );
+    })
+    .filter(Boolean);
+};
+
 const getPlaceDescription = (place) => {
   const intro = String(place.introduction || '').split('.').find(Boolean);
   if (intro) return intro.trim();
@@ -344,9 +441,13 @@ const parseDurationMinutes = (value, fallback) => {
   if (!numbers.length) return fallback;
 
   const average = numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
-  if (text.includes('ngay') || text.includes('dem')) return Math.round(average * 360);
-  if (text.includes('gio')) return Math.round(average * 60);
-  return Math.round(average);
+  const parsed = text.includes('ngay') || text.includes('dem')
+    ? Math.round(average * 360)
+    : text.includes('gio')
+      ? Math.round(average * 60)
+      : Math.round(average);
+
+  return Math.min(Math.max(parsed, 30), 240);
 };
 
 const createPlaceActivity = ({
@@ -428,13 +529,18 @@ const generateItinerary = async (
     throw new Error(`Khong co dia diem nao trong bang places cho "${destination}".`);
   }
 
-  let placeCursor = 0;
+  const usedPlaceKeys = new Set();
   const itinerary = Array.from({ length: days }, (_, dayIndex) => {
     const date = new Date(startDate);
     date.setDate(date.getDate() + dayIndex);
     const dailyCount = dailyActivityCounts[dayIndex] || 3;
-    const dayPlaces = places.slice(placeCursor, placeCursor + dailyCount);
-    placeCursor += dailyCount;
+    const dayPlaces = pickDayPlaces({
+      places,
+      preferredStyles,
+      dailyCount,
+      dayIndex,
+      usedKeys: usedPlaceKeys,
+    });
 
     return {
       day: dayIndex + 1,
