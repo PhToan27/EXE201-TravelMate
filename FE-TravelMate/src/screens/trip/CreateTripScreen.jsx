@@ -98,6 +98,7 @@ const CreateTripScreen = ({ navigation }) => {
   const [budget, setBudget] = useState('');
   const [people, setPeople] = useState('2');
   const [travelStyles, setTravelStyles] = useState(['BEACH']); // Default select BEACH
+  const [tripType, setTripType] = useState('Solo');
   const [errors, setErrors] = useState({});
 
   const toggleTravelStyle = (value) => {
@@ -162,6 +163,7 @@ const CreateTripScreen = ({ navigation }) => {
         budget: budget ? parseInt(budget.replace(/[^\d]/g, ''), 10) : 0,
         people: parseInt(people, 10) || 1,
         travelStyle: travelStyles.join(', '),
+        tripType: tripType,
         generateAiItinerary: true,
       });
 
@@ -175,10 +177,22 @@ const CreateTripScreen = ({ navigation }) => {
     }
   };
   const travelStylesList = [
-    { value: 'FOOD', label: 'Ăn uống', icon: 'restaurant-outline' },
-    { value: 'BEACH', label: 'Biển', icon: 'water-outline' },
-    { value: 'CULTURE', label: 'Văn hóa', icon: 'library-outline' },
-    { value: 'NATURE', label: 'Thiên nhiên', icon: 'leaf-outline' },
+    { value: 'FOOD', label: 'Food', icon: 'restaurant-outline' },
+    { value: 'NATURE', label: 'Nature', icon: 'leaf-outline' },
+    { value: 'BEACH', label: 'Beach', icon: 'water-outline' },
+    { value: 'HISTORICAL', label: 'Historical', icon: 'library-outline' },
+    { value: 'ADVENTURE', label: 'Adventure', icon: 'trail-sign-outline' },
+    { value: 'PHOTOGRAPHY', label: 'Photography', icon: 'camera-outline' },
+    { value: 'SHOPPING', label: 'Shopping', icon: 'bag-outline' },
+    { value: 'NIGHTLIFE', label: 'Nightlife', icon: 'wine-outline' },
+  ];
+
+  const tripTypesList = [
+    { value: 'Solo', label: 'Solo', icon: 'person-outline' },
+    { value: 'Couple', label: 'Couple', icon: 'heart-outline' },
+    { value: 'Family', label: 'Family', icon: 'people-outline' },
+    { value: 'Friends', label: 'Friends', icon: 'chatbubbles-outline' },
+    { value: 'Business', label: 'Business', icon: 'briefcase-outline' },
   ];
 
   return (
@@ -253,6 +267,36 @@ const CreateTripScreen = ({ navigation }) => {
                 keyboardType="numeric"
                 leftIcon={<Ionicons name="wallet-outline" size={18} color={COLORS.gray[400]} />}
               />
+            </View>
+          </View>
+
+          {/* Trip Type Grid */}
+          <View style={styles.styleSection}>
+            <Text style={styles.styleSectionLabel}>LOẠI CHUYẾN ĐI</Text>
+            <View style={styles.styleGrid}>
+              {tripTypesList.map((item) => {
+                const isActive = tripType === item.value;
+                return (
+                  <TouchableOpacity
+                    key={item.value}
+                    style={[
+                      styles.styleChip,
+                      isActive && styles.styleChipActive,
+                    ]}
+                    onPress={() => setTripType(item.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={18}
+                      color={isActive ? COLORS.primary : COLORS.gray[500]}
+                    />
+                    <Text style={[styles.styleChipLabel, isActive && styles.styleChipLabelActive]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 

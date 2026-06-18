@@ -26,6 +26,8 @@ import NotificationsScreen from '../screens/community/NotificationsScreen';
 import UserProfileScreen from '../screens/community/UserProfileScreen';
 import AdminModerationScreen from '../screens/community/AdminModerationScreen';
 import SearchPlacesScreen from '../screens/place/SearchPlacesScreen';
+import WeatherScreen from '../screens/trip/WeatherScreen';
+import ExportScreen from '../screens/trip/ExportScreen';
 
 import { COLORS } from '../utils/constants';
 
@@ -53,6 +55,8 @@ const RootStack = () => (
     <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="AdminModeration" component={AdminModerationScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="SearchPlaces" component={SearchPlacesScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="Weather" component={WeatherScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="Export" component={ExportScreen} options={{ animation: 'slide_from_right' }} />
   </Stack.Navigator>
 );
 
