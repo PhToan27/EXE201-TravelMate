@@ -35,6 +35,7 @@ app.use('/api/places', require('./routes/place.routes'));
 app.use('/api/navigation', require('./routes/navigation.routes'));
 app.use('/api/posts', require('./routes/post.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
+app.use('/api/weather', require('./routes/weather.routes'));
 
 
 
