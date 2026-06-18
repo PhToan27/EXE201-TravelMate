@@ -20,7 +20,7 @@ const formatDayName = (dateObj) => {
   return VI_DAYS[enDay] || enDay;
 };
 
-const TripTimeline = ({ trip }) => {
+const TripTimeline = ({ trip, tripId }) => {
   const [selectedDay, setSelectedDay] = useState(1);
   if (!trip) return null;
 
@@ -76,6 +76,7 @@ const TripTimeline = ({ trip }) => {
         <DayScheduleCard
           day={selectedDay}
           activities={byDay[selectedDay] || []}
+          tripId={tripId}
           date={
             startDate
               ? formatDate(addDays(parseISO(typeof startDate === 'string' ? startDate : startDate.toISOString()), selectedDay - 1), 'dd/MM/yyyy')
