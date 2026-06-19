@@ -32,6 +32,8 @@ const getNearestSheetHeight = (height) =>
     Math.abs(point - height) < Math.abs(nearest - height) ? point : nearest
   );
 const LOCATION_TIMEOUT_MS = 12000;
+const GPS_UPDATE_INTERVAL_MS = 2000;
+const GPS_DISTANCE_INTERVAL_M = 3;
 
 const decodePolyline = (encoded = '') => {
   const coordinates = [];
@@ -360,6 +362,19 @@ const withTimeout = (promise, timeoutMs, message) =>
     }),
   ]);
 
+const getLocationPoint = (coords) => {
+  const latitude = Number(coords?.latitude);
+  const longitude = Number(coords?.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+};
+
+const normalizeHeading = (value) => {
+  const heading = Number(value);
+  return Number.isFinite(heading) && heading >= 0 ? heading : null;
+};
+
 const NavigationDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
@@ -367,6 +382,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [origin, setOrigin] = useState(null);
+  const [userHeading, setUserHeading] = useState(0);
   const [routeData, setRouteData] = useState(null);
   const [sheetHeight, setSheetHeight] = useState(SHEET_MID_HEIGHT);
   const sheetHeightRef = useRef(SHEET_MID_HEIGHT);
@@ -399,6 +415,58 @@ const NavigationDetailScreen = ({ route, navigation }) => {
   );
 
   useEffect(() => {
+    let isMounted = true;
+    let locationSubscription = null;
+    let headingSubscription = null;
+
+    const updateCurrentLocation = (coords) => {
+      if (!isMounted) return;
+
+      const nextOrigin = getLocationPoint(coords);
+      if (nextOrigin) {
+        setOrigin(nextOrigin);
+      }
+
+      const nextHeading = normalizeHeading(coords?.heading);
+      if (nextHeading !== null) {
+        setUserHeading(nextHeading);
+      }
+    };
+
+    const startGpsWatch = async () => {
+      try {
+        const nextLocationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: GPS_UPDATE_INTERVAL_MS,
+            distanceInterval: GPS_DISTANCE_INTERVAL_M,
+          },
+          (location) => updateCurrentLocation(location.coords)
+        );
+
+        if (!isMounted) {
+          nextLocationSubscription.remove();
+          return;
+        }
+        locationSubscription = nextLocationSubscription;
+
+        const nextHeadingSubscription = await Location.watchHeadingAsync((heading) => {
+          const nextHeading = normalizeHeading(heading.trueHeading ?? heading.magHeading);
+          if (nextHeading !== null && isMounted) {
+            setUserHeading(nextHeading);
+          }
+        });
+
+        if (!isMounted) {
+          nextHeadingSubscription.remove();
+          return;
+        }
+        headingSubscription = nextHeadingSubscription;
+      } catch (watchError) {
+        console.log('GPS watch error:', watchError.message);
+      }
+    };
+
     const loadNavigation = async () => {
       let fallbackOrigin = null;
 
@@ -431,6 +499,8 @@ const NavigationDetailScreen = ({ route, navigation }) => {
             latitude: current.coords.latitude,
             longitude: current.coords.longitude,
           };
+          updateCurrentLocation(current.coords);
+          startGpsWatch();
         } else if (initialPlace) {
           const destinationPoint = getPlaceCoordinate(initialPlace);
           if (!destinationPoint) {
@@ -447,7 +517,9 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         }
 
         fallbackOrigin = currentOrigin;
-        setOrigin(currentOrigin);
+        if (isMounted) {
+          setOrigin(currentOrigin);
+        }
 
         if (initialPlace) {
           try {
@@ -589,7 +661,13 @@ const NavigationDetailScreen = ({ route, navigation }) => {
     }
 
     loadNavigation();
-  }, [placeId, initialPlace, vehicle]);
+
+    return () => {
+      isMounted = false;
+      locationSubscription?.remove();
+      headingSubscription?.remove();
+    };
+  }, [placeId, placeName, initialPlace, vehicle]);
 
   const destination = useMemo(() => {
     if (!routeData?.place) return null;
@@ -688,7 +766,14 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         }}
       >
         {origin && (
-          <Marker coordinate={origin} title="Vị trí của bạn" pinColor={COLORS.primary} />
+          <Marker
+            coordinate={origin}
+            title="Vi tri cua ban"
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges
+          >
+            <UserLocationPuck heading={userHeading} />
+          </Marker>
         )}
         {destination && (
           <Marker
@@ -780,9 +865,40 @@ const StatusRow = ({ icon, label, value }) => (
   </View>
 );
 
+const UserLocationPuck = ({ heading }) => (
+  <View style={styles.userPuckOuter}>
+    <View style={[styles.userPuckHeading, { transform: [{ rotate: `${heading}deg` }] }]}>
+      <Ionicons name="navigate" size={18} color={COLORS.white} />
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   map: { flex: 1 },
+  userPuckOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(59,130,246,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userPuckHeading: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
