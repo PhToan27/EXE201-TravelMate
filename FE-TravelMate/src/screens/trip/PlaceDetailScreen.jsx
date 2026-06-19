@@ -21,14 +21,20 @@ const isDefaultDaNangCoordinate = (point) =>
   Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
   Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
 
+const toCoordinatePoint = (latitude, longitude) => {
+  const point = { latitude: Number(latitude), longitude: Number(longitude) };
+  return Number.isFinite(point.latitude) && Number.isFinite(point.longitude) ? point : null;
+};
+
 const getUsableCoordinates = (place) => {
-  const latitude = Number(place?.coordinates?.lat ?? place?.latitude);
-  const longitude = Number(place?.coordinates?.lng ?? place?.longitude);
+  const coordinates = place?.coordinates || {};
+  const candidates = [
+    toCoordinatePoint(coordinates.latitude, coordinates.longitude),
+    toCoordinatePoint(coordinates.lat, coordinates.lng),
+    toCoordinatePoint(place?.latitude, place?.longitude),
+  ].filter(Boolean);
 
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-
-  const point = { latitude, longitude };
-  return isDefaultDaNangCoordinate(point) ? null : point;
+  return candidates.find((point) => !isDefaultDaNangCoordinate(point)) || null;
 };
 
 const toPlaceCoordinates = (point) => ({
@@ -54,13 +60,19 @@ const mergePlaceDetails = (initialPlace, fetchedPlace) => {
 
 const PlaceDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
-  const { placeName, place: initialPlace } = route.params;
+  const { placeName, place: initialPlace, fromSearch = false } = route.params;
   const [loading, setLoading] = useState(!initialPlace);
   const [place, setPlace] = useState(initialPlace || null);
 
   useEffect(() => {
     const fetchDetails = async () => {
       try {
+        if (fromSearch && initialPlace) {
+          setPlace(initialPlace);
+          setLoading(false);
+          return;
+        }
+
         if (!initialPlace) setLoading(true);
         const res = await getPlaceDetails(placeName);
         if (res.success) {
@@ -77,7 +89,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     };
 
     fetchDetails();
-  }, [initialPlace, placeName]);
+  }, [fromSearch, initialPlace, placeName]);
 
   const handleShare = async () => {
     if (!place) return;

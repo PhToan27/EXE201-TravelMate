@@ -132,6 +132,99 @@ const escapeRegex = (text) => {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+const buildSearchRegex = (value) => new RegExp(escapeRegex(String(value || '').trim()), 'i');
+
+const normalizeSearchText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Ä‘/g, 'd')
+    .trim();
+
+const getPlaceSearchText = (place) =>
+  normalizeSearchText(
+    [
+      place?.name,
+      place?.address,
+      place?.category,
+      place?.introduction,
+      place?.ticketPrice,
+    ].join(' ')
+  );
+
+const getCategoryKeywords = (category) => {
+  const normalized = normalizeSearchText(category);
+  if (!normalized) return [];
+
+  if (['food', 'an uong', 'am thuc'].some((keyword) => normalized.includes(keyword))) {
+    return ['food', 'an uong', 'am thuc', 'hai san', 'nha hang', 'quan', 'mon'];
+  }
+
+  if (['beach', 'bien'].some((keyword) => normalized.includes(keyword))) {
+    return ['beach', 'bien', 'bai tam', 'hai san', 'vinh'];
+  }
+
+  if (['culture', 'van hoa'].some((keyword) => normalized.includes(keyword))) {
+    return ['culture', 'van hoa', 'chua', 'bao tang', 'di tich', 'lich su', 'cau'];
+  }
+
+  if (['nature', 'thien nhien'].some((keyword) => normalized.includes(keyword))) {
+    return ['nature', 'thien nhien', 'nui', 'son tra', 'suoi', 'rung', 'ban dao'];
+  }
+
+  return [normalized];
+};
+
+const searchPlaces = async ({ q = '', category = '', limit = 30 } = {}) => {
+  const keyword = String(q || '').trim();
+  const categoryKeyword = String(category || '').trim();
+  const normalizedKeyword = normalizeSearchText(keyword);
+  const categoryKeywords = getCategoryKeywords(categoryKeyword);
+  const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+
+  const filters = [];
+  if (keyword) {
+    const keywordRegex = buildSearchRegex(keyword);
+    filters.push({
+      $or: [
+        { name: keywordRegex },
+        { address: keywordRegex },
+        { category: keywordRegex },
+        { introduction: keywordRegex },
+      ],
+    });
+  }
+
+  if (categoryKeyword && !['all', 'tat ca', 'tất cả'].includes(categoryKeyword.toLowerCase())) {
+    filters.push({ category: buildSearchRegex(categoryKeyword) });
+  }
+
+  const query = filters.length ? { $and: filters } : {};
+  let places = await Place.find(query)
+    .sort({ rating: -1, name: 1 })
+    .limit(safeLimit)
+    .lean();
+
+  if ((normalizedKeyword || categoryKeywords.length) && places.length < safeLimit) {
+    places = await Place.find({})
+      .sort({ rating: -1, name: 1 })
+      .limit(safeLimit)
+      .lean();
+  }
+
+  return places
+    .filter((place) => {
+      const searchText = getPlaceSearchText(place);
+      const matchesKeyword = !normalizedKeyword || searchText.includes(normalizedKeyword);
+      const matchesCategory =
+        !categoryKeywords.length || categoryKeywords.some((keyword) => searchText.includes(keyword));
+      return matchesKeyword && matchesCategory;
+    })
+    .slice(0, safeLimit);
+};
+
 const getUnsplashImage = (placeName) => {
   const norm = normalizeText(placeName);
 
@@ -253,4 +346,5 @@ const getPlaceDetails = async (placeName) => {
 
 module.exports = {
   getPlaceDetails,
+  searchPlaces,
 };

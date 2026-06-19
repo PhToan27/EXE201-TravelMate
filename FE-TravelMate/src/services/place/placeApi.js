@@ -11,3 +11,14 @@ export const getPlaceDetails = async (name) => {
   });
   return response.data;
 };
+
+/**
+ * Search places from MongoDB places collection
+ * GET /api/places/search?q=...
+ */
+export const searchPlaces = async ({ q = '', category = '', limit = 30 } = {}) => {
+  const response = await api.get('/places/search', {
+    params: { q, category, limit },
+  });
+  return response.data;
+};

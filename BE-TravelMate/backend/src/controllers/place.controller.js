@@ -29,6 +29,32 @@ const getPlaceDetails = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Search places from MongoDB places collection
+ * @route   GET /api/places/search
+ * @access  Private
+ */
+const searchPlaces = async (req, res) => {
+  try {
+    const data = await placeService.searchPlaces({
+      q: req.query.q,
+      category: req.query.category,
+      limit: req.query.limit,
+    });
+
+    return res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getPlaceDetails,
+  searchPlaces,
 };

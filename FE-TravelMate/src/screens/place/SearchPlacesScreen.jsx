@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -11,52 +12,78 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING } from '../../utils/constants';
+import { searchPlaces } from '../../services/place/placeApi';
 
-const categories = ['Tất cả', 'Ẩm thực', 'Biển', 'Văn hóa'];
-
-const places = [
-  {
-    name: 'Bán đảo Sơn Trà',
-    location: 'Đà Nẵng, Việt Nam',
-    rating: 4.8,
-    category: 'Thiên nhiên',
-    imageUrl: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1000&q=80',
-    tags: ['Thiên nhiên', 'Khám phá'],
-  },
-  {
-    name: 'Chùa Cầu',
-    location: 'Hội An, Quảng Nam',
-    rating: 4.9,
-    category: 'Văn hóa',
-    imageUrl: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1000&q=80',
-    tags: ['Kiến trúc', 'Lịch sử'],
-  },
-  {
-    name: 'Chợ Đông Ba',
-    location: 'Huế, Thừa Thiên Huế',
-    rating: 4.5,
-    category: 'Ẩm thực',
-    imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=80',
-    tags: ['Ẩm thực', 'Mua sắm'],
-  },
+const categories = [
+  { label: 'Tat ca', value: '' },
+  { label: 'An uong', value: 'food' },
+  { label: 'Bien', value: 'beach' },
+  { label: 'Van hoa', value: 'culture' },
+  { label: 'Thien nhien', value: 'nature' },
 ];
+
+const fallbackImage =
+  'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1000&q=80';
+
+const getPlaceAddress = (place) => place?.address || place?.location || 'Da Nang, Viet Nam';
+
+const getPlaceTags = (place) =>
+  [place?.category, place?.ticketPrice]
+    .filter(Boolean)
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .slice(0, 2);
 
 const SearchPlacesScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(categories[0]);
+  const [places, setPlaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const filteredPlaces = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return places.filter((place) => {
-      const matchesKeyword =
-        !keyword ||
-        place.name.toLowerCase().includes(keyword) ||
-        place.location.toLowerCase().includes(keyword);
-      const matchesCategory = activeCategory === 'Tất cả' || place.category === activeCategory;
-      return matchesKeyword && matchesCategory;
-    });
+  useEffect(() => {
+    let isMounted = true;
+    const timeout = setTimeout(async () => {
+      try {
+        setLoading(true);
+        setErrorMessage('');
+        const response = await searchPlaces({
+          q: query.trim(),
+          category: activeCategory.value,
+          limit: 100,
+        });
+
+        if (!isMounted) return;
+        if (response.success) {
+          setPlaces(response.data || []);
+        } else {
+          setErrorMessage(response.message || 'Khong the tim kiem dia diem.');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(error.response?.data?.message || 'Khong the tim kiem dia diem.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
   }, [activeCategory, query]);
+
+  const handleOpenPlace = (place) => {
+    navigation.navigate('PlaceDetail', {
+      placeName: place.name,
+      place,
+      fromSearch: true,
+    });
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -64,7 +91,7 @@ const SearchPlacesScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={COLORS.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tìm kiếm</Text>
+        <Text style={styles.headerTitle}>Tim kiem</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -74,24 +101,41 @@ const SearchPlacesScreen = ({ navigation }) => {
           value={query}
           onChangeText={setQuery}
           style={styles.searchInput}
-          placeholder="Tìm địa điểm du lịch"
+          placeholder="Tim dia diem trong places"
           placeholderTextColor={COLORS.gray[400]}
+          returnKeyType="search"
         />
-        <Ionicons name="options-outline" size={18} color={COLORS.gray[500]} />
+        {query ? (
+          <TouchableOpacity onPress={() => setQuery('')}>
+            <Ionicons name="close-circle" size={18} color={COLORS.gray[400]} />
+          </TouchableOpacity>
+        ) : (
+          <Ionicons name="options-outline" size={18} color={COLORS.gray[500]} />
+        )}
       </View>
 
       <View style={styles.categories}>
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            style={[styles.categoryPill, activeCategory === category && styles.categoryPillActive]}
-            onPress={() => setActiveCategory(category)}
-          >
-            <Text style={[styles.categoryText, activeCategory === category && styles.categoryTextActive]}>
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category.label}
+              style={[
+                styles.categoryPill,
+                activeCategory.label === category.label && styles.categoryPillActive,
+              ]}
+              onPress={() => setActiveCategory(category)}
+            >
+              <Text
+                style={[
+                  styles.categoryText,
+                  activeCategory.label === category.label && styles.categoryTextActive,
+                ]}
+              >
+                {category.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -99,41 +143,72 @@ const SearchPlacesScreen = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + SPACING.xl }]}
       >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Địa điểm nổi tiếng</Text>
-          <Text style={styles.seeAll}>Xem tất cả</Text>
+          <Text style={styles.sectionTitle}>Dia diem trong database</Text>
+          <Text style={styles.seeAll}>{places.length} ket qua</Text>
         </View>
 
-        {filteredPlaces.map((place) => (
-          <TouchableOpacity
-            key={place.name}
-            style={styles.placeCard}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('PlaceDetail', { placeName: place.name })}
-          >
-            <Image source={{ uri: place.imageUrl }} style={styles.placeImage} />
-            <TouchableOpacity style={styles.favoriteButton}>
-              <Ionicons name="heart-outline" size={18} color={COLORS.primary} />
-            </TouchableOpacity>
-            <View style={styles.placeBody}>
-              <View style={styles.placeTitleRow}>
-                <Text style={styles.placeName}>{place.name}</Text>
-                <View style={styles.ratingRow}>
-                  <Ionicons name="star" size={13} color={COLORS.warning} />
-                  <Text style={styles.ratingText}>{place.rating}</Text>
+        {loading && (
+          <View style={styles.stateBox}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.stateText}>Dang tim trong bang places...</Text>
+          </View>
+        )}
+
+        {!loading && !!errorMessage && (
+          <View style={styles.stateBox}>
+            <Ionicons name="alert-circle-outline" size={28} color={COLORS.error} />
+            <Text style={styles.stateText}>{errorMessage}</Text>
+          </View>
+        )}
+
+        {!loading && !errorMessage && !places.length && (
+          <View style={styles.stateBox}>
+            <Ionicons name="search-outline" size={28} color={COLORS.gray[400]} />
+            <Text style={styles.stateText}>Khong co dia diem phu hop trong bang places.</Text>
+          </View>
+        )}
+
+        {!loading &&
+          !errorMessage &&
+          places.map((place) => {
+            const tags = getPlaceTags(place);
+            return (
+              <TouchableOpacity
+                key={place._id || place.id || place.name}
+                style={styles.placeCard}
+                activeOpacity={0.9}
+                onPress={() => handleOpenPlace(place)}
+              >
+                <Image source={{ uri: place.imageUrl || fallbackImage }} style={styles.placeImage} />
+                <View style={styles.placeBody}>
+                  <View style={styles.placeTitleRow}>
+                    <Text style={styles.placeName} numberOfLines={2}>
+                      {place.name}
+                    </Text>
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={13} color={COLORS.warning} />
+                      <Text style={styles.ratingText}>{place.rating || '4.5'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.locationRow}>
+                    <Ionicons name="location-outline" size={13} color={COLORS.gray[400]} />
+                    <Text style={styles.locationText} numberOfLines={2}>
+                      {getPlaceAddress(place)}
+                    </Text>
+                  </View>
+                  {!!tags.length && (
+                    <View style={styles.tags}>
+                      {tags.map((tag) => (
+                        <Text key={tag} style={styles.tag} numberOfLines={1}>
+                          {tag}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
                 </View>
-              </View>
-              <View style={styles.locationRow}>
-                <Ionicons name="location-outline" size={13} color={COLORS.gray[400]} />
-                <Text style={styles.locationText}>{place.location}</Text>
-              </View>
-              <View style={styles.tags}>
-                {place.tags.map((tag) => (
-                  <Text key={tag} style={styles.tag}>{tag}</Text>
-                ))}
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+              </TouchableOpacity>
+            );
+          })}
       </ScrollView>
     </View>
   );
@@ -166,10 +241,11 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 13, color: COLORS.black },
   categories: {
-    flexDirection: 'row',
+    paddingVertical: SPACING.md,
+  },
+  categoryScroll: {
     gap: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
   },
   categoryPill: {
     paddingHorizontal: SPACING.md,
@@ -188,6 +264,21 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.black },
   seeAll: { fontSize: 12, color: COLORS.primary, fontWeight: '700' },
+  stateBox: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    alignItems: 'center',
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.gray[100],
+  },
+  stateText: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    textAlign: 'center',
+    fontWeight: '600',
+  },
   placeCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,
@@ -199,31 +290,21 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   placeImage: { width: '100%', height: 180, backgroundColor: COLORS.gray[100] },
-  favoriteButton: {
-    position: 'absolute',
-    top: SPACING.sm,
-    right: SPACING.sm,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   placeBody: { padding: SPACING.sm },
   placeTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: SPACING.sm,
   },
   placeName: { flex: 1, fontSize: 15, fontWeight: '800', color: COLORS.black },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   ratingText: { fontSize: 12, color: COLORS.gray[600], fontWeight: '700' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  locationText: { fontSize: 11, color: COLORS.gray[500] },
+  locationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 4 },
+  locationText: { flex: 1, fontSize: 11, color: COLORS.gray[500], lineHeight: 16 },
   tags: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
   tag: {
+    maxWidth: '48%',
     backgroundColor: COLORS.primaryLight,
     color: COLORS.primaryDark,
     fontSize: 10,
