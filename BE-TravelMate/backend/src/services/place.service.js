@@ -154,6 +154,12 @@ const getPlaceSearchText = (place) =>
     ].join(' ')
   );
 
+const getSearchTokens = (value) =>
+  normalizeSearchText(value)
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1);
+
 const getCategoryKeywords = (category) => {
   const normalized = normalizeSearchText(category);
   if (!normalized) return [];
@@ -175,6 +181,39 @@ const getCategoryKeywords = (category) => {
   }
 
   return [normalized];
+};
+
+const getKeywordScore = (place, normalizedKeyword, keywordTokens) => {
+  if (!normalizedKeyword && !keywordTokens.length) return 1;
+
+  const nameText = normalizeSearchText(place?.name);
+  const addressText = normalizeSearchText(place?.address);
+  const categoryText = normalizeSearchText(place?.category);
+  const searchText = getPlaceSearchText(place);
+  let score = 0;
+
+  if (nameText === normalizedKeyword) score += 120;
+  if (nameText.includes(normalizedKeyword)) score += 80;
+  if (searchText.includes(normalizedKeyword)) score += 50;
+
+  keywordTokens.forEach((token) => {
+    if (nameText.includes(token)) score += 24;
+    else if (addressText.includes(token)) score += 10;
+    else if (categoryText.includes(token)) score += 8;
+    else if (searchText.includes(token)) score += 4;
+  });
+
+  return score;
+};
+
+const getCategoryScore = (place, categoryKeywords) => {
+  if (!categoryKeywords.length) return 0;
+
+  const searchText = getPlaceSearchText(place);
+  return categoryKeywords.reduce(
+    (score, keyword) => (searchText.includes(keyword) ? score + 12 : score),
+    0
+  );
 };
 
 const searchPlaces = async ({ q = '', category = '', limit = 30 } = {}) => {
@@ -222,6 +261,44 @@ const searchPlaces = async ({ q = '', category = '', limit = 30 } = {}) => {
         !categoryKeywords.length || categoryKeywords.some((keyword) => searchText.includes(keyword));
       return matchesKeyword && matchesCategory;
     })
+    .slice(0, safeLimit);
+};
+
+const searchPlacesBySimilarity = async ({ q = '', category = '', limit = 30 } = {}) => {
+  const keyword = String(q || '').trim();
+  const categoryKeyword = String(category || '').trim();
+  const normalizedKeyword = normalizeSearchText(keyword);
+  const keywordTokens = getSearchTokens(keyword);
+  const categoryKeywords = getCategoryKeywords(categoryKeyword);
+  const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+
+  const places = await Place.find({})
+    .sort({ rating: -1, name: 1 })
+    .limit(500)
+    .lean();
+
+  if (!normalizedKeyword && !categoryKeywords.length) {
+    return places.slice(0, safeLimit);
+  }
+
+  return places
+    .map((place) => {
+      const keywordScore = getKeywordScore(place, normalizedKeyword, keywordTokens);
+      const categoryScore = getCategoryScore(place, categoryKeywords);
+      const ratingScore = Math.max(Number(place.rating || 0), 0);
+      return {
+        place,
+        score: keywordScore + categoryScore + ratingScore,
+        keywordScore,
+        categoryScore,
+      };
+    })
+    .filter((item) => {
+      if (normalizedKeyword) return item.keywordScore > 0;
+      return item.categoryScore > 0;
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.place)
     .slice(0, safeLimit);
 };
 
@@ -346,5 +423,5 @@ const getPlaceDetails = async (placeName) => {
 
 module.exports = {
   getPlaceDetails,
-  searchPlaces,
+  searchPlaces: searchPlacesBySimilarity,
 };
