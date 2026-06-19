@@ -113,7 +113,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     const navigationPoint = getUsableCoordinates(place);
 
     if (!navigationPoint && !resolvedPlaceId) {
-      Alert.alert('Loi', 'Khong the lay toa do dia diem de xem duong di.');
+      Alert.alert('Lỗi', 'Không thể lấy tọa độ địa điểm để xem đường đi.');
       return;
     }
 

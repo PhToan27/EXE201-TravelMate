@@ -15,17 +15,17 @@ import { COLORS, RADIUS, SPACING } from '../../utils/constants';
 import { searchPlaces } from '../../services/place/placeApi';
 
 const categories = [
-  { label: 'Tat ca', value: '' },
-  { label: 'An uong', value: 'food' },
-  { label: 'Bien', value: 'beach' },
-  { label: 'Van hoa', value: 'culture' },
-  { label: 'Thien nhien', value: 'nature' },
+  { label: 'Tất cả', value: '' },
+  { label: 'Ăn uống', value: 'food' },
+  { label: 'Biển', value: 'beach' },
+  { label: 'Văn hóa', value: 'culture' },
+  { label: 'Thiên nhiên', value: 'nature' },
 ];
 
 const fallbackImage =
   'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1000&q=80';
 
-const getPlaceAddress = (place) => place?.address || place?.location || 'Da Nang, Viet Nam';
+const getPlaceAddress = (place) => place?.address || place?.location || 'Đà Nẵng, Việt Nam';
 
 const getPlaceTags = (place) =>
   [place?.category, place?.ticketPrice]
@@ -58,11 +58,11 @@ const SearchPlacesScreen = ({ navigation }) => {
         if (response.success) {
           setPlaces(response.data || []);
         } else {
-          setErrorMessage(response.message || 'Khong the tim kiem dia diem.');
+          setErrorMessage(response.message || 'Không thể tìm kiếm địa điểm.');
         }
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.response?.data?.message || 'Khong the tim kiem dia diem.');
+          setErrorMessage(error.response?.data?.message || 'Không thể tìm kiếm địa điểm.');
         }
       } finally {
         if (isMounted) {
@@ -91,7 +91,7 @@ const SearchPlacesScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color={COLORS.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tim kiem</Text>
+        <Text style={styles.headerTitle}>Tìm kiếm</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -101,7 +101,7 @@ const SearchPlacesScreen = ({ navigation }) => {
           value={query}
           onChangeText={setQuery}
           style={styles.searchInput}
-          placeholder="Tim dia diem trong places"
+          placeholder="Tìm địa điểm du lịch"
           placeholderTextColor={COLORS.gray[400]}
           returnKeyType="search"
         />
@@ -143,14 +143,14 @@ const SearchPlacesScreen = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + SPACING.xl }]}
       >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Dia diem trong database</Text>
-          <Text style={styles.seeAll}>{places.length} ket qua</Text>
+          <Text style={styles.sectionTitle}>Địa điểm gợi ý</Text>
+          <Text style={styles.seeAll}>{places.length} kết quả</Text>
         </View>
 
         {loading && (
           <View style={styles.stateBox}>
             <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.stateText}>Dang tim trong bang places...</Text>
+            <Text style={styles.stateText}>Đang tìm địa điểm phù hợp...</Text>
           </View>
         )}
 
@@ -164,7 +164,7 @@ const SearchPlacesScreen = ({ navigation }) => {
         {!loading && !errorMessage && !places.length && (
           <View style={styles.stateBox}>
             <Ionicons name="search-outline" size={28} color={COLORS.gray[400]} />
-            <Text style={styles.stateText}>Khong co dia diem phu hop trong bang places.</Text>
+            <Text style={styles.stateText}>Không có địa điểm phù hợp.</Text>
           </View>
         )}
 
