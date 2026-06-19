@@ -46,3 +46,8 @@ temp/
 # MongoDB local data (nếu có)
 data/
 mongodb-data/
+
+# Reference data used by the application source code
+!src/data/
+src/data/*
+!src/data/itineraryPreviewPlaces.js

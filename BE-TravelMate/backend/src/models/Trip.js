@@ -48,6 +48,12 @@ const tripSchema = new mongoose.Schema(
       default: [],
     },
 
+    tripType: {
+      type: String,
+      enum: ["Solo", "Couple", "Family", "Friends", "Business"],
+      default: "Solo",
+    },
+
     status: {
       type: String,
       enum: ["DRAFT", "SAVED", "DELETED"],

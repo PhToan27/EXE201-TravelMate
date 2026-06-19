@@ -1,16 +1,22 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 import { formatVND } from '../../utils/currencyUtils';
 
-const RestaurantCard = ({ restaurant }) => {
+const RestaurantCard = ({ restaurant, tripId }) => {
+  const navigation = useNavigation();
   if (!restaurant) return null;
 
   const stars = Math.round(restaurant.rating || 0);
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => navigation.navigate('PlaceDetail', { placeName: restaurant.name, tripId })}
+    >
       <View style={styles.iconWrap}>
         <Ionicons name="restaurant-outline" size={28} color={COLORS.primary} />
       </View>
@@ -49,7 +55,7 @@ const RestaurantCard = ({ restaurant }) => {
           </Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
