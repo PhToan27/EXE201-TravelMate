@@ -127,6 +127,21 @@ const HomeScreen = ({ navigation }) => {
         />
       </View>
 
+      <TouchableOpacity
+        style={styles.previewAction}
+        onPress={() => navigation.navigate('ItineraryPreview')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.previewActionIcon}>
+          <Ionicons name="sparkles-outline" size={22} color={COLORS.primary} />
+        </View>
+        <View style={styles.previewActionBody}>
+          <Text style={styles.previewActionTitle}>Gợi ý lịch trình nhanh</Text>
+          <Text style={styles.previewActionSubtitle}>Xem thử lịch trình theo ngân sách và sở thích của bạn</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+      </TouchableOpacity>
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Địa điểm nổi bật</Text>
@@ -308,6 +323,27 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.lg,
     gap: SPACING.xs,
   },
+  previewAction: {
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.lg,
+    padding: SPACING.md,
+    backgroundColor: '#FFF7ED',
+    borderRadius: RADIUS.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  previewActionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  previewActionBody: { flex: 1 },
+  previewActionTitle: { fontSize: 14, fontWeight: '800', color: COLORS.black },
+  previewActionSubtitle: { fontSize: 12, color: COLORS.gray[600], marginTop: 3, lineHeight: 16 },
   section: {
     paddingHorizontal: SPACING.md,
     marginBottom: SPACING.lg,

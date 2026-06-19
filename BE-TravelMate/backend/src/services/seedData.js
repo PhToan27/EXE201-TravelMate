@@ -5,6 +5,7 @@ const Trip = require('../models/Trip');
 const ItineraryTemplate = require('../models/ItineraryTemplate');
 const Place = require('../models/Place');
 const itineraryTemplates = require('../data/itineraryTemplates');
+const itineraryPreviewPlaces = require('../data/itineraryPreviewPlaces');
 
 const seedItineraryTemplates = async () => {
   if (!itineraryTemplates.length) {
@@ -31,6 +32,15 @@ const seedItineraryTemplates = async () => {
   );
 
   console.log(`Itinerary templates upserted: ${itineraryTemplates.length}`);
+};
+
+const seedItineraryPreviewPlaces = async () => {
+  await Promise.all(
+    itineraryPreviewPlaces.map((place) =>
+      Place.updateOne({ name: place.name }, { $set: place }, { upsert: true })
+    )
+  );
+  console.log(`Preview places upserted: ${itineraryPreviewPlaces.length}`);
 };
 
 const RESTAURANT_SEEDS = [
@@ -1847,6 +1857,7 @@ const seedPopularHotels = async () => {
 const seedAdminData = async () => {
   try {
     await seedItineraryTemplates();
+    await seedItineraryPreviewPlaces();
     await seedPopularRestaurants();
     await seedPopularHotels();
 
