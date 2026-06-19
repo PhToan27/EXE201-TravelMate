@@ -28,6 +28,7 @@ import AdminModerationScreen from '../screens/community/AdminModerationScreen';
 import SearchPlacesScreen from '../screens/place/SearchPlacesScreen';
 import WeatherScreen from '../screens/trip/WeatherScreen';
 import ExportScreen from '../screens/trip/ExportScreen';
+import ItineraryPreviewScreen from '../screens/trip/ItineraryPreviewScreen';
 
 import { COLORS } from '../utils/constants';
 
@@ -39,6 +40,7 @@ const RootStack = () => (
     <Stack.Screen name="Tabs" component={TabNavigator} />
     <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="CreateTrip" component={CreateTripScreen} options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+    <Stack.Screen name="ItineraryPreview" component={ItineraryPreviewScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="EditTrip" component={EditTripScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="PackingList" component={PackingListScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="SharedTrip" component={SharedTripScreen} options={{ animation: 'slide_from_right' }} />
