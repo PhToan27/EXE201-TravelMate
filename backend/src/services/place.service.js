@@ -181,17 +181,56 @@ const findPopularPlace = (placeName) => {
 };
 
 const generateDefaultPlaceData = (placeName) => {
+  const norm = String(placeName || '').toLowerCase();
+  let category = 'Điểm tham quan';
+  let ticketPrice = 'Miễn phí hoặc thay đổi tùy thời điểm';
+  let openHours = '08:00 - 18:00 (Tham khảo)';
+  let duration = '1-2 giờ';
+  let intro = `${placeName} là một địa điểm đáng cân nhắc trong chuyến đi. Du khách có thể tham quan, chụp ảnh, trải nghiệm văn hóa địa phương và kết hợp với các điểm gần đó để tối ưu lịch trình.`;
+
+  if (
+    norm.includes('khach san') ||
+    norm.includes('hotel') ||
+    norm.includes('homestay') ||
+    norm.includes('resort') ||
+    norm.includes('nha nghi') ||
+    norm.includes('villa')
+  ) {
+    category = 'Khách sạn';
+    ticketPrice = 'Liên hệ để đặt phòng';
+    openHours = 'Nhận phòng từ 14:00, trả phòng trước 12:00';
+    duration = 'Qua đêm';
+    intro = `${placeName} cung cấp không gian nghỉ ngơi thoải mái, tiện nghi đầy đủ và dịch vụ chăm sóc khách hàng tận tình, rất thích hợp cho kỳ nghỉ của bạn.`;
+  } else if (
+    norm.includes('nha hang') ||
+    norm.includes('quan an') ||
+    norm.includes('quan com') ||
+    norm.includes('cafe') ||
+    norm.includes('ca phe') ||
+    norm.includes('quan lau') ||
+    norm.includes('quan nuong') ||
+    norm.includes('tiem an') ||
+    norm.includes('am thuc') ||
+    norm.includes('an uong')
+  ) {
+    category = 'Ẩm thực';
+    ticketPrice = 'Thay đổi tùy món ăn (30k - 200k)';
+    openHours = '08:00 - 22:00 (Tham khảo)';
+    duration = '45 phút - 1.5 giờ';
+    intro = `${placeName} là địa điểm ẩm thực lý tưởng nằm trong lịch trình. Tại đây, bạn có thể thưởng thức các món ăn ngon đặc trưng vùng miền với chất lượng tuyệt hảo và dịch vụ chu đáo.`;
+  }
+
   return {
     name: placeName,
-    category: 'Điểm tham quan',
+    category,
     rating: 4.5,
     reviewsCount: '100+',
-    duration: '1-2 giờ',
+    duration,
     difficulty: 'Dễ',
-    introduction: `${placeName} là một địa điểm đáng cân nhắc trong chuyến đi. Du khách có thể tham quan, chụp ảnh, trải nghiệm văn hóa địa phương và kết hợp với các điểm gần đó để tối ưu lịch trình.`,
+    introduction: intro,
     address: `${placeName}, Việt Nam`,
-    openHours: '08:00 - 18:00 (Tham khảo)',
-    ticketPrice: 'Miễn phí hoặc thay đổi tùy thời điểm',
+    openHours,
+    ticketPrice,
     imageUrl: getUnsplashImage(placeName),
     coordinates: {
       lat: 16.0544,
