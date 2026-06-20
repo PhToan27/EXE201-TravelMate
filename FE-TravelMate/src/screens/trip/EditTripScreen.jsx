@@ -14,8 +14,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Loading from '../../components/common/Loading';
-import useTrip from '../../hooks/useTrip';
 import { ACTIVITY_CATEGORIES, COLORS, RADIUS, SPACING } from '../../utils/constants';
+import { getNearbyPlaces } from '../../services/place/placeApi';
+import { optimizeTripDay } from '../../services/trip/tripApi';
 
 const PERIODS = [
   { key: 'morning', label: 'Sáng', title: 'Buổi Sáng', icon: 'sunny-outline', range: '05:00 - 11:59' },
@@ -33,6 +34,25 @@ const DEFAULT_ACTIVITY = {
   cost: '',
   durationMinutes: '',
   transport: 'OTHER',
+};
+
+const CITY_CENTERS = {
+  'da nang': { lat: 16.0544, lng: 108.2022 },
+  'ha noi': { lat: 21.0285, lng: 105.8542 },
+  'da lat': { lat: 11.9404, lng: 108.4583 },
+  'phu quoc': { lat: 10.2290, lng: 103.9575 },
+  'nha trang': { lat: 12.2458, lng: 109.1943 },
+  'ho chi minh': { lat: 10.7769, lng: 106.7009 },
+  'sai gon': { lat: 10.7769, lng: 106.7009 },
+  'hoi an': { lat: 15.8801, lng: 108.3380 },
+  'hue': { lat: 16.4637, lng: 107.5909 },
+};
+
+const getPlaceCategoryKey = (place) => {
+  const cat = String(place.category || '').toLowerCase();
+  if (cat.includes('ẩm thực') || cat.includes('nha hang') || cat.includes('quan an') || cat.includes('cafe')) return 'FOOD';
+  if (cat.includes('khách sạn') || cat.includes('hotel') || cat.includes('resort')) return 'HOTEL';
+  return 'PLACE';
 };
 
 const getActivityKey = (activity, index) => activity._id || activity.id || activity.clientKey || `local-${index}`;
@@ -82,6 +102,160 @@ const EditTripScreen = ({ route, navigation }) => {
   const [editingIndex, setEditingIndex] = useState(null);
   const [draft, setDraft] = useState(DEFAULT_ACTIVITY);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const [loadingNearby, setLoadingNearby] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+
+  const fetchNearbySuggs = async () => {
+    if (!trip) return;
+    setLoadingNearby(true);
+    try {
+      const dayActs = activities.filter(
+        (a) => (a.day || 1) === selectedDay && a.coordinates && a.coordinates.lat
+      );
+      
+      let lat = null;
+      let lng = null;
+      
+      if (dayActs.length > 0) {
+        const lastAct = dayActs[dayActs.length - 1];
+        lat = lastAct.coordinates.lat;
+        lng = lastAct.coordinates.lng;
+      } else {
+        const tripActs = activities.filter((a) => a.coordinates && a.coordinates.lat);
+        if (tripActs.length > 0) {
+          lat = tripActs[0].coordinates.lat;
+          lng = tripActs[0].coordinates.lng;
+        } else {
+          const dest = String(trip.destination || '').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+          for (const [city, coords] of Object.entries(CITY_CENTERS)) {
+            if (dest.includes(city)) {
+              lat = coords.lat;
+              lng = coords.lng;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!lat || !lng) {
+        lat = 16.0544;
+        lng = 108.2022;
+      }
+
+      const res = await getNearbyPlaces(lat, lng, '', 6, '', trip.destination);
+      if (res.success && Array.isArray(res.data)) {
+        setNearbyPlaces(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching nearby places for edit screen:', err);
+    } finally {
+      setLoadingNearby(false);
+    }
+  };
+
+  useEffect(() => {
+    if (trip) {
+      fetchNearbySuggs();
+    }
+  }, [trip, selectedDay, activities.length]);
+
+  const swapActivities = (origIdxA, origIdxB) => {
+    if (origIdxA === undefined || origIdxB === undefined) return;
+    
+    setActivities((prev) => {
+      const next = [...prev];
+      const tempTime = next[origIdxA].time;
+      next[origIdxA].time = next[origIdxB].time;
+      next[origIdxB].time = tempTime;
+      return next;
+    });
+  };
+
+  const onMoveUp = (index, periodActivities) => {
+    if (index <= 0) return;
+    const actA = periodActivities[index];
+    const actB = periodActivities[index - 1];
+    swapActivities(actA.originalIndex, actB.originalIndex);
+  };
+
+  const onMoveDown = (index, periodActivities) => {
+    if (index >= periodActivities.length - 1) return;
+    const actA = periodActivities[index];
+    const actB = periodActivities[index + 1];
+    swapActivities(actA.originalIndex, actB.originalIndex);
+  };
+
+  const handleOptimizeRoute = async () => {
+    const dayActs = activities.filter(a => (a.day || 1) === selectedDay);
+    const withCoords = dayActs.filter(a => a.coordinates && a.coordinates.lat && a.coordinates.lng);
+    
+    if (withCoords.length <= 2) {
+      Alert.alert('Thông tin', 'Cần ít nhất 3 hoạt động có tọa độ địa lý trong ngày để tối ưu lộ trình.');
+      return;
+    }
+
+    setOptimizing(true);
+    try {
+      const res = await optimizeTripDay(tripId, { activities: dayActs, day: selectedDay });
+      if (res.success && res.data) {
+        const optimizedActs = res.data.activities;
+        const stats = res.data.stats;
+        
+        Alert.alert(
+          '⚡ Tối ưu lộ trình thành công',
+          `Lộ trình mới giúp bạn:\n• Tiết kiệm khoảng cách: ${stats.distanceSaved} km\n• Tiết kiệm thời gian di chuyển: ${stats.timeSavedMinutes} phút\n\nBạn có muốn áp dụng thay đổi này?`,
+          [
+            { text: 'Hủy', style: 'cancel' },
+            {
+              text: 'Áp dụng',
+              onPress: () => {
+                setActivities(prev => {
+                  const otherDays = prev.filter(a => (a.day || 1) !== selectedDay);
+                  const mappedOptimized = optimizedActs.map((act, idx) => ({
+                    ...act,
+                    clientKey: act._id || act.clientKey || `opt-${Date.now()}-${idx}`,
+                  }));
+                  return [...otherDays, ...mappedOptimized];
+                });
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Thất bại', res.message || 'Không thể tối ưu lộ trình');
+      }
+    } catch (err) {
+      console.error('Optimize error:', err);
+      Alert.alert('Lỗi', 'Không thể kết nối tới dịch vụ tối ưu lộ trình.');
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const addNearbyPlace = (place) => {
+    const parsePrice = (priceVal) => {
+      if (!priceVal) return 0;
+      const num = parseInt(String(priceVal).replace(/[^\d]/g, ''), 10);
+      return isNaN(num) ? 0 : num;
+    };
+
+    setEditingIndex(null);
+    setDraft({
+      ...DEFAULT_ACTIVITY,
+      location: place.name,
+      time: getDefaultTime(activePeriod),
+      day: selectedDay,
+      category: getPlaceCategoryKey(place),
+      cost: place.ticketPrice ? String(parsePrice(place.ticketPrice)) : '0',
+      coordinates: place.coordinates || null,
+      address: place.address || '',
+      description: place.introduction || '',
+    });
+    setModalVisible(true);
+  };
 
   useEffect(() => {
     fetchTripById(tripId);
@@ -254,7 +428,10 @@ const EditTripScreen = ({ route, navigation }) => {
                 <TouchableOpacity
                   key={day}
                   style={[styles.dayTab, isActive && styles.dayTabActive]}
-                  onPress={() => setSelectedDay(day)}
+                  onPress={() => {
+                    setSelectedDay(day);
+                    setIsReordering(false);
+                  }}
                 >
                   <Text style={[styles.dayTabText, isActive && styles.dayTabTextActive]}>
                     Ngày {day}
@@ -265,13 +442,83 @@ const EditTripScreen = ({ route, navigation }) => {
           </ScrollView>
         )}
 
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.actionButton, optimizing && styles.actionButtonDisabled]}
+            onPress={handleOptimizeRoute}
+            disabled={optimizing}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="flash" size={14} color={COLORS.white} />
+            <Text style={styles.actionButtonText}>
+              {optimizing ? 'Đang tối ưu...' : 'Tối ưu lộ trình (AI)'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButtonOutline, isReordering && styles.actionButtonActive]}
+            onPress={() => setIsReordering(!isReordering)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={isReordering ? 'checkmark-circle' : 'swap-vertical'}
+              size={14}
+              color={isReordering ? COLORS.white : COLORS.primary}
+            />
+            <Text style={[styles.actionButtonOutlineText, isReordering && styles.actionButtonActiveText]}>
+              {isReordering ? 'Xong' : 'Sắp xếp lại'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <PeriodSection
           period={currentPeriod}
           activities={currentActivities}
+          isReordering={isReordering}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
           onAdd={openCreateModal}
           onEdit={openEditModal}
           onMenu={showActivityMenu}
         />
+
+        {nearbyPlaces.length > 0 && !isReordering && (
+          <View style={styles.nearbySection}>
+            <View style={styles.nearbyHeader}>
+              <Ionicons name="bulb-outline" size={16} color="#EAB308" />
+              <Text style={styles.nearbyTitle}>💡 Địa điểm lân cận gợi ý</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.nearbyScroll}
+            >
+              {nearbyPlaces.map((place) => {
+                const placeCat = ACTIVITY_CATEGORIES[getPlaceCategoryKey(place)] || ACTIVITY_CATEGORIES.PLACE;
+                return (
+                  <TouchableOpacity
+                    key={place._id}
+                    style={styles.nearbyCard}
+                    onPress={() => addNearbyPlace(place)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.nearbyIconContainer, { backgroundColor: `${placeCat.color}15` }]}>
+                      <Ionicons name={placeCat.icon} size={16} color={placeCat.color} />
+                    </View>
+                    <View style={styles.nearbyInfo}>
+                      <Text style={styles.nearbyCardTitle} numberOfLines={1}>
+                        {place.name}
+                      </Text>
+                      <Text style={styles.nearbyCardMeta} numberOfLines={1}>
+                        ⭐ {place.rating || '4.5'} • {place.distance} km
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         {PERIODS.filter((period) => period.key !== activePeriod).map((period) => (
           <CollapsedPeriod
@@ -294,7 +541,7 @@ const EditTripScreen = ({ route, navigation }) => {
   );
 };
 
-const PeriodSection = ({ period, activities, onAdd, onEdit, onMenu }) => (
+const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown, onAdd, onEdit, onMenu }) => (
   <View style={styles.section}>
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleWrap}>
@@ -306,19 +553,24 @@ const PeriodSection = ({ period, activities, onAdd, onEdit, onMenu }) => (
       </View>
     </View>
 
-    {activities.map((activity) => (
+    {activities.map((activity, index) => (
       <ActivityEditCard
         key={activity.clientKey || activity.originalIndex}
         activity={activity}
+        isReordering={isReordering}
+        onMoveUp={() => onMoveUp(index, activities)}
+        onMoveDown={() => onMoveDown(index, activities)}
         onPress={() => onEdit(activity)}
         onMenu={() => onMenu(activity)}
       />
     ))}
 
-    <TouchableOpacity style={styles.addButton} onPress={onAdd} activeOpacity={0.8}>
-      <Ionicons name="add-circle-outline" size={18} color={COLORS.info} />
-      <Text style={styles.addText}>Thêm hoạt động mới</Text>
-    </TouchableOpacity>
+    {!isReordering && (
+      <TouchableOpacity style={styles.addButton} onPress={onAdd} activeOpacity={0.8}>
+        <Ionicons name="add-circle-outline" size={18} color={COLORS.info} />
+        <Text style={styles.addText}>Thêm hoạt động mới</Text>
+      </TouchableOpacity>
+    )}
   </View>
 );
 
@@ -336,14 +588,25 @@ const CollapsedPeriod = ({ period, count, onPress }) => (
   </TouchableOpacity>
 );
 
-const ActivityEditCard = ({ activity, onPress, onMenu }) => {
+const ActivityEditCard = ({ activity, isReordering, onMoveUp, onMoveDown, onPress, onMenu }) => {
   const category = ACTIVITY_CATEGORIES[activity.category] || ACTIVITY_CATEGORIES.PLACE;
 
   return (
     <TouchableOpacity style={styles.activityCard} onPress={onPress} activeOpacity={0.85}>
-      <View style={styles.dragHandle}>
-        <Ionicons name="grid-outline" size={15} color={COLORS.gray[300]} />
-      </View>
+      {isReordering ? (
+        <View style={styles.reorderControls}>
+          <TouchableOpacity style={styles.reorderArrow} onPress={onMoveUp} hitSlop={6}>
+            <Ionicons name="chevron-up" size={16} color={COLORS.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.reorderArrow} onPress={onMoveDown} hitSlop={6}>
+            <Ionicons name="chevron-down" size={16} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.dragHandle}>
+          <Ionicons name="grid-outline" size={15} color={COLORS.gray[300]} />
+        </View>
+      )}
       <View style={[styles.thumbnail, { backgroundColor: `${category.color}18` }]}>
         <Ionicons name={category.icon} size={24} color={category.color} />
       </View>
@@ -356,9 +619,11 @@ const ActivityEditCard = ({ activity, onPress, onMenu }) => {
           <Text style={styles.activityTime}>{buildTimeRange(activity)}</Text>
         </View>
       </View>
-      <TouchableOpacity style={styles.moreButton} onPress={onMenu} hitSlop={8}>
-        <Ionicons name="ellipsis-vertical" size={18} color={COLORS.info} />
-      </TouchableOpacity>
+      {!isReordering && (
+        <TouchableOpacity style={styles.moreButton} onPress={onMenu} hitSlop={8}>
+          <Ionicons name="ellipsis-vertical" size={18} color={COLORS.info} />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 };
@@ -773,6 +1038,131 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: COLORS.white,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+    marginTop: 4,
+  },
+  actionButton: {
+    flex: 1.2,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  actionButtonOutline: {
+    flex: 1,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  actionButtonOutlineText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  actionButtonActiveText: {
+    color: COLORS.white,
+  },
+  reorderControls: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginRight: 4,
+  },
+  reorderArrow: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nearbySection: {
+    marginTop: SPACING.md,
+    marginBottom: SPACING.md,
+    backgroundColor: '#FAFAFA',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  nearbyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: SPACING.sm,
+  },
+  nearbyTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.gray[700],
+  },
+  nearbyScroll: {
+    gap: SPACING.sm,
+    paddingVertical: 2,
+  },
+  nearbyCard: {
+    width: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  nearbyIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.xs,
+  },
+  nearbyInfo: {
+    flex: 1,
+  },
+  nearbyCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.black,
+  },
+  nearbyCardMeta: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.gray[500],
+    marginTop: 2,
   },
 });
 

@@ -81,3 +81,13 @@ export const getSharedTrip = async (shareCode) => {
   const response = await api.get(`/trips/shared/${shareCode}`);
   return response.data;
 };
+
+/**
+ * Optimize route for a trip's day
+ * POST /api/trips/:id/optimize-day
+ */
+export const optimizeTripDay = async (id, { activities, day }) => {
+  const response = await api.post(`/trips/${id}/optimize-day`, { activities, day });
+  return response.data;
+};
+

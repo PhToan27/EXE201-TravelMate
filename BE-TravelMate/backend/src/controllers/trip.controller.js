@@ -957,6 +957,50 @@ const getSharedTrip = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Optimize daily route using coordinates (TSP/AI)
+ * @route   POST /api/trips/:id/optimize-day
+ * @access  Private
+ */
+const optimizeTripDay = async (req, res) => {
+  try {
+    const { activities, day } = req.body;
+
+    if (!Array.isArray(activities)) {
+      return res.status(400).json({ success: false, message: 'Danh sách hoạt động không hợp lệ' });
+    }
+
+    const trip = await Trip.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy chuyến đi' });
+    }
+
+    // Call optimization service
+    const { activities: optimizedList, stats } = aiService.optimizeRoute(activities);
+
+    // Swap / reassign times chronologically so they keep the same time slots but in optimized spatial order
+    const timeSlots = activities
+      .map(act => act.time || '08:00')
+      .sort((a, b) => a.localeCompare(b));
+
+    const finalizedActivities = optimizedList.map((act, index) => ({
+      ...act,
+      time: timeSlots[index] || act.time || '08:00',
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        activities: finalizedActivities,
+        stats,
+      },
+    });
+  } catch (error) {
+    console.error('Optimize route error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createTrip,
   getTrips,
@@ -967,4 +1011,6 @@ module.exports = {
   deleteTrip,
   shareTrip,
   getSharedTrip,
+  optimizeTripDay,
 };
+
