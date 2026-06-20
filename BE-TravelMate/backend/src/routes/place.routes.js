@@ -1,5 +1,5 @@
 const express = require('express');
-const { getPlaceDetails } = require('../controllers/place.controller');
+const { getPlaceDetails, getNearbyPlaces } = require('../controllers/place.controller');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
@@ -8,5 +8,6 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/detail', getPlaceDetails);
+router.get('/nearby', getNearbyPlaces);
 
 module.exports = router;

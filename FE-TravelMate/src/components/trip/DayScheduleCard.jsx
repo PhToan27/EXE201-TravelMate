@@ -6,7 +6,7 @@ import ActivityCard from './ActivityCard';
 /**
  * DayScheduleCard — shows all activities for a single day
  */
-const DayScheduleCard = ({ day, activities = [] }) => {
+const DayScheduleCard = ({ day, activities = [], tripId }) => {
   return (
     <View style={styles.container}>
       {activities.length === 0 ? (
@@ -19,6 +19,7 @@ const DayScheduleCard = ({ day, activities = [] }) => {
             key={idx}
             activity={activity}
             isLast={idx === activities.length - 1}
+            tripId={tripId}
           />
         ))
       )}

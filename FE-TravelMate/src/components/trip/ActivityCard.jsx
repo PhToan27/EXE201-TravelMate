@@ -28,7 +28,7 @@ const getTimePeriod = (timeStr) => {
   return 'BUỔI TỐI';
 };
 
-const ActivityCard = ({ activity, isLast = false }) => {
+const ActivityCard = ({ activity, isLast = false, tripId }) => {
   const navigation = useNavigation();
   const cat = ACTIVITY_CATEGORIES[activity.category] || ACTIVITY_CATEGORIES.OTHER;
   const transport = activity.transport ? TRANSPORT_TYPES[activity.transport] : null;
@@ -56,17 +56,7 @@ const ActivityCard = ({ activity, isLast = false }) => {
           activeOpacity={0.7}
           onPress={() => {
             if (activity.location && activity.location !== 'N/A') {
-              navigation.navigate('PlaceDetail', {
-                placeName: activity.location,
-                place: {
-                  _id: activity.placeId,
-                  name: activity.location,
-                  address: activity.address,
-                  coordinates: activity.coordinates,
-                  category: activity.category,
-                  introduction: activity.description,
-                },
-              });
+              navigation.navigate('PlaceDetail', { placeName: activity.location, tripId });
             }
           }}
         >

@@ -41,6 +41,9 @@ const RestaurantSuggestionScreen = ({ route, navigation }) => {
           data={restaurants}
           keyExtractor={(_, i) => String(i)}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + SPACING.lg }]}
+          ListHeaderComponent={
+            <Text style={styles.intro}>Nhà hàng AI gợi ý dành cho chuyến đi của bạn:</Text>
+          }
           renderItem={({ item }) => <RestaurantCard restaurant={item} />}
         />
       )}
@@ -51,6 +54,7 @@ const RestaurantSuggestionScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   list: { padding: SPACING.md },
+  intro: { fontSize: 13, color: COLORS.gray[500], marginBottom: SPACING.md, fontStyle: 'italic' },
 });
 
 export default RestaurantSuggestionScreen;

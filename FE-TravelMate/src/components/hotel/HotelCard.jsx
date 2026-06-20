@@ -1,16 +1,22 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 import { formatVND } from '../../utils/currencyUtils';
 
-const HotelCard = ({ hotel }) => {
+const HotelCard = ({ hotel, tripId }) => {
+  const navigation = useNavigation();
   if (!hotel) return null;
 
   const stars = Math.round(hotel.rating || 0);
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => navigation.navigate('PlaceDetail', { placeName: hotel.name, tripId })}
+    >
       <View style={styles.iconWrap}>
         <Ionicons name="bed-outline" size={32} color={COLORS.primary} />
       </View>
@@ -40,14 +46,17 @@ const HotelCard = ({ hotel }) => {
         {!!hotel.description && (
           <Text style={styles.description} numberOfLines={3}>{hotel.description}</Text>
         )}
-        {hotel.estimatedCostPerNight > 0 && (
-          <Text style={styles.price}>
-            {formatVND(hotel.estimatedCostPerNight)}{' '}
-            <Text style={styles.perNight}>/đêm</Text>
-          </Text>
-        )}
+        {(() => {
+          const displayPrice = hotel.estimatedCostPerNight && hotel.estimatedCostPerNight > 0
+            ? `${formatVND(hotel.estimatedCostPerNight)} /đêm`
+            : hotel.ticketPrice;
+
+          return displayPrice ? (
+            <Text style={styles.price}>{displayPrice}</Text>
+          ) : null;
+        })()}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 

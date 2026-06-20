@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   Alert,
   Share,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
-import { getPlaceDetails } from '../../services/place/placeApi';
+import { getPlaceDetails, getNearbyPlaces } from '../../services/place/placeApi';
+import useTrip from '../../hooks/useTrip';
 
 const isDefaultDaNangCoordinate = (point) =>
   point &&
@@ -54,9 +56,32 @@ const mergePlaceDetails = (initialPlace, fetchedPlace) => {
 
 const PlaceDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
-  const { placeName, place: initialPlace } = route.params;
-  const [loading, setLoading] = useState(!initialPlace);
-  const [place, setPlace] = useState(initialPlace || null);
+  const { placeName, tripId } = route.params || {};
+  const [loading, setLoading] = useState(true);
+  const [place, setPlace] = useState(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const [loadingNearby, setLoadingNearby] = useState(false);
+
+  // useTrip integration
+  const { currentTrip: trip, fetchTripById, updateTrip } = useTrip();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedTime, setSelectedTime] = useState('08:00');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchNearby = async (lat, lng, name) => {
+    try {
+      setLoadingNearby(true);
+      const res = await getNearbyPlaces(lat, lng, name, 5);
+      if (res.success) {
+        setNearbyPlaces(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching nearby places:', err);
+    } finally {
+      setLoadingNearby(false);
+    }
+  };
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -64,7 +89,11 @@ const PlaceDetailScreen = ({ route, navigation }) => {
         if (!initialPlace) setLoading(true);
         const res = await getPlaceDetails(placeName);
         if (res.success) {
-          setPlace((prev) => mergePlaceDetails(prev || initialPlace, res.data));
+          setPlace(res.data);
+          const { lat, lng } = res.data.coordinates || {};
+          if (lat && lng) {
+            fetchNearby(lat, lng, res.data.name);
+          }
         } else {
           Alert.alert('Lỗi', 'Không thể lấy thông tin địa điểm.');
         }
@@ -79,6 +108,12 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     fetchDetails();
   }, [initialPlace, placeName]);
 
+  useEffect(() => {
+    if (tripId) {
+      fetchTripById(tripId);
+    }
+  }, [tripId]);
+
   const handleShare = async () => {
     if (!place) return;
     try {
@@ -91,8 +126,177 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const parsePriceNumber = (value) => {
+    if (!value) return 0;
+    const clean = String(value).toLowerCase();
+    if (clean.includes('miễn phí') || clean.includes('free')) return 0;
+    const match = clean.replace(/[.,\s]/g, '').match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+
   const handleAddToItinerary = () => {
-    Alert.alert('Thêm vào lịch trình', `Bạn đã thêm "${place?.name || placeName}" vào lịch trình thành công!`);
+    if (!tripId) {
+      Alert.alert('Thông báo', 'Không xác định được chuyến đi hiện tại. Hãy truy cập từ trang chi tiết chuyến đi.');
+      return;
+    }
+    if (!place) return;
+
+    const cat = String(place.category || '').toLowerCase();
+    if (cat.includes('khách sạn') || cat.includes('khach san') || cat.includes('hotel') || cat.includes('homestay') || cat.includes('resort')) {
+      Alert.alert(
+        'Thêm khách sạn',
+        `Bạn có muốn chọn "${place.name}" làm nơi lưu trú cho chuyến đi không?`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Xác nhận',
+            onPress: async () => {
+              try {
+                setIsSubmitting(true);
+                const hotelRec = {
+                  name: place.name,
+                  address: place.address || '',
+                  description: place.introduction || 'Nơi lưu trú được lựa chọn.',
+                  estimatedCostPerNight: parsePriceNumber(place.ticketPrice) || 500000,
+                  rating: place.rating || 4.5,
+                  area: place.address || ''
+                };
+                const res = await updateTrip(tripId, { hotelRecommendation: hotelRec });
+                if (res.success) {
+                  Alert.alert('Thành công', `Đã đặt "${place.name}" làm khách sạn của chuyến đi!`);
+                } else {
+                  Alert.alert('Lỗi', res.message || 'Không thể cập nhật khách sạn.');
+                }
+              } catch (err) {
+                Alert.alert('Lỗi', err.message);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }
+          }
+        ]
+      );
+    } else if (cat.includes('ẩm thực') || cat.includes('am thuc') || cat.includes('nhà hàng') || cat.includes('quán ăn') || cat.includes('cafe')) {
+      Alert.alert(
+        'Thêm nhà hàng',
+        'Bạn muốn thêm địa điểm ăn uống này vào danh sách nào?',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Gợi ý ẩm thực',
+            onPress: async () => {
+              try {
+                setIsSubmitting(true);
+                const newRest = {
+                  name: place.name,
+                  address: place.address || '',
+                  cuisineType: place.category || 'Ẩm thực địa phương',
+                  averagePricePerPerson: parsePriceNumber(place.ticketPrice) || 120000,
+                  rating: place.rating || 4.5,
+                  description: place.introduction || 'Quán ăn ngon tự chọn.'
+                };
+                const currentRest = trip?.restaurantRecommendations || [];
+                if (currentRest.some(r => r.name === place.name)) {
+                  Alert.alert('Thông báo', 'Nhà hàng này đã có trong danh sách gợi ý.');
+                  return;
+                }
+                const res = await updateTrip(tripId, {
+                  restaurantRecommendations: [...currentRest, newRest]
+                });
+                if (res.success) {
+                  Alert.alert('Thành công', `Đã thêm "${place.name}" vào danh sách gợi ý ẩm thực!`);
+                } else {
+                  Alert.alert('Lỗi', res.message || 'Không thể cập nhật.');
+                }
+              } catch (err) {
+                Alert.alert('Lỗi', err.message);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }
+          },
+          {
+            text: 'Lịch trình hoạt động',
+            onPress: () => {
+              setSelectedDay(1);
+              setSelectedTime('08:00');
+              setModalVisible(true);
+            }
+          }
+        ]
+      );
+    } else {
+      setSelectedDay(1);
+      setSelectedTime('08:00');
+      setModalVisible(true);
+    }
+  };
+
+  const handleConfirmAddActivity = async () => {
+    if (!trip || !place) return;
+
+    // Check for existing activity at the same day and time
+    const conflictAct = (trip.activities || []).find(
+      (act) => Number(act.day) === Number(selectedDay) && act.time === selectedTime
+    );
+
+    if (conflictAct) {
+      Alert.alert(
+        'Trùng lịch trình',
+        `Khung giờ ${selectedTime} của Ngày ${selectedDay} đã có hoạt động "${conflictAct.location}". Bạn có muốn thay thế bằng "${place.name}" không?`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Thay thế',
+            onPress: () => performAddActivity(true)
+          }
+        ]
+      );
+    } else {
+      performAddActivity(false);
+    }
+  };
+
+  const performAddActivity = async (replaceExisting = false) => {
+    try {
+      setIsSubmitting(true);
+      const ticketCost = parsePriceNumber(place.ticketPrice);
+      
+      const newAct = {
+        day: selectedDay,
+        time: selectedTime,
+        location: place.name,
+        address: place.address || '',
+        description: place.introduction || '',
+        cost: ticketCost,
+        category: place.category === 'Ẩm thực' ? 'FOOD' : 'PLACE',
+        transport: 'MOTORBIKE',
+        durationMinutes: place.category === 'Ẩm thực' ? 60 : 90,
+      };
+
+      let updatedActivities = [...(trip.activities || [])];
+      
+      if (replaceExisting) {
+        // Filter out the conflicting activity
+        updatedActivities = updatedActivities.filter(
+          (act) => !(Number(act.day) === Number(selectedDay) && act.time === selectedTime)
+        );
+      }
+
+      updatedActivities.push(newAct);
+      const res = await updateTrip(tripId, { activities: updatedActivities });
+      
+      if (res.success) {
+        setModalVisible(false);
+        Alert.alert('Thành công', `Đã thêm "${place.name}" vào lịch trình Ngày ${selectedDay}!`);
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể thêm vào lịch trình.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenMap = () => {
@@ -247,6 +451,47 @@ const PlaceDetailScreen = ({ route, navigation }) => {
             </View>
           </View>
 
+          {/* AI Recommended Nearby Section */}
+          {nearbyPlaces.length > 0 && (
+            <View style={styles.nearbySection}>
+              <View style={styles.nearbyHeader}>
+                <Ionicons name="sparkles" size={18} color={COLORS.primary} />
+                <Text style={styles.nearbyTitle}>AI Gợi ý địa điểm lân cận</Text>
+              </View>
+              <Text style={styles.nearbySubtitle}>Khám phá các điểm vui chơi & ẩm thực gần {place.name}:</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.nearbyList}
+              >
+                {nearbyPlaces.map((np) => (
+                  <TouchableOpacity
+                    key={np._id}
+                    style={styles.nearbyCard}
+                    activeOpacity={0.8}
+                    onPress={() => navigation.push('PlaceDetail', { placeName: np.name, tripId })}
+                  >
+                    <Image
+                      source={{ uri: np.imageUrl || 'https://images.unsplash.com/photo-1528127269322-539801943592?w=400' }}
+                      style={styles.nearbyCardImage}
+                    />
+                    <View style={styles.nearbyCardBody}>
+                      <Text style={styles.nearbyCardName} numberOfLines={1}>
+                        {np.name}
+                      </Text>
+                      <View style={styles.nearbyCardRow}>
+                        <Ionicons name="location-outline" size={11} color={COLORS.gray[400]} />
+                        <Text style={styles.nearbyCardDist}>{np.distance} km</Text>
+                        <Ionicons name="star" size={11} color={COLORS.warning} style={{ marginLeft: 6 }} />
+                        <Text style={styles.nearbyCardRating}>{np.rating}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Buttons */}
           <View style={styles.btnRow}>
             <TouchableOpacity style={styles.primaryBtn} onPress={handleAddToItinerary}>
@@ -264,6 +509,122 @@ const PlaceDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Date & Time Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Thêm vào lịch trình</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.black} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Chọn ngày và khung giờ bạn muốn đi tới {place?.name}:
+            </Text>
+
+            {/* Day Selection */}
+            <Text style={styles.sectionTitle}>Chọn Ngày</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
+              contentContainerStyle={styles.chipList}
+            >
+              {Array.from({ length: trip?.totalDays || 3 }).map((_, i) => {
+                const dayNum = i + 1;
+                const isSelected = selectedDay === dayNum;
+                return (
+                  <TouchableOpacity
+                    key={dayNum}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => setSelectedDay(dayNum)}
+                  >
+                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                      Ngày {dayNum}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Time Selection */}
+            <Text style={styles.sectionTitle}>Chọn Khung Giờ</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
+              contentContainerStyle={styles.chipList}
+            >
+              {['08:00', '10:30', '14:30', '18:00'].map((time) => {
+                const isSelected = selectedTime === time;
+                
+                // Check if this time slot on the selectedDay is already busy
+                const isBusy = (trip?.activities || []).some(
+                  (act) => Number(act.day) === Number(selectedDay) && act.time === time
+                );
+
+                const timeLabel = time === '08:00' ? 'Sáng (08:00)' :
+                                  time === '10:30' ? 'Trưa (10:30)' :
+                                  time === '14:30' ? 'Chiều (14:30)' : 'Tối (18:00)';
+                
+                const label = isBusy ? `${timeLabel} (Trùng)` : timeLabel;
+
+                return (
+                  <TouchableOpacity
+                    key={time}
+                    style={[
+                      styles.chip,
+                      isSelected && styles.chipActive,
+                      isBusy && !isSelected && { borderColor: COLORS.gray[300], backgroundColor: COLORS.gray[50] }
+                    ]}
+                    onPress={() => setSelectedTime(time)}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      isSelected && styles.chipTextActive,
+                      isBusy && !isSelected && { color: COLORS.gray[400] }
+                    ]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Actions */}
+            <TouchableOpacity
+              style={[styles.confirmBtn, isSubmitting && { opacity: 0.7 }]}
+              onPress={handleConfirmAddActivity}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.white} />
+                  <Text style={styles.confirmBtnText}>Xác nhận thêm</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setModalVisible(false)}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.cancelBtnText}>Hủy bỏ</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Floating Header Buttons (Back / Share) */}
       <View style={[styles.headerFloating, { paddingTop: insets.top + 8 }]}>
@@ -520,6 +881,167 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     color: COLORS.primary,
     fontWeight: '700',
+    fontSize: 15,
+  },
+  nearbySection: {
+    marginBottom: SPACING.lg,
+  },
+  nearbyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  nearbyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.black,
+  },
+  nearbySubtitle: {
+    fontSize: 12,
+    color: COLORS.gray[550] || COLORS.gray[500],
+    marginBottom: 12,
+  },
+  nearbyList: {
+    gap: 12,
+    paddingRight: SPACING.md,
+  },
+  nearbyCard: {
+    width: 140,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  nearbyCardImage: {
+    width: '100%',
+    height: 85,
+    backgroundColor: COLORS.gray[100],
+  },
+  nearbyCardBody: {
+    padding: 8,
+    gap: 4,
+  },
+  nearbyCardName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  nearbyCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  nearbyCardDist: {
+    fontSize: 10,
+    color: COLORS.gray[500],
+    fontWeight: '500',
+  },
+  nearbyCardRating: {
+    fontSize: 10,
+    color: COLORS.gray[600],
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xl,
+    gap: SPACING.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.black,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: COLORS.gray[500],
+    marginBottom: SPACING.xs,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.black,
+    marginBottom: SPACING.xs,
+  },
+  chipScroll: {
+    flexGrow: 0,
+    marginBottom: SPACING.sm,
+  },
+  chipList: {
+    gap: SPACING.sm,
+    paddingRight: SPACING.md,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.gray[100],
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  chipActive: {
+    backgroundColor: '#FFF7ED',
+    borderColor: COLORS.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.gray[600],
+  },
+  chipTextActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  confirmBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  cancelBtn: {
+    backgroundColor: COLORS.white,
+    borderColor: COLORS.gray[200],
+    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.xs,
+  },
+  cancelBtnText: {
+    color: COLORS.gray[600],
+    fontWeight: '600',
     fontSize: 15,
   },
 });

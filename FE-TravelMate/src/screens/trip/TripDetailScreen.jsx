@@ -20,6 +20,7 @@ import useTrip from '../../hooks/useTrip';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 import { formatDateRange, getDayCount } from '../../utils/dateUtils';
 import { formatVND } from '../../utils/currencyUtils';
+import { getNearbyPlaces } from '../../services/place/placeApi';
 
 const TABS = ['Lịch trình', 'Khách sạn', 'Nhà hàng', 'Ngân sách'];
 
@@ -29,9 +30,46 @@ const TripDetailScreen = ({ route, navigation }) => {
   const { currentTrip: trip, isLoading, fetchTripById, shareTrip, deleteTrip } = useTrip();
   const [activeTab, setActiveTab] = useState(0);
 
+  const [altHotels, setAltHotels] = useState([]);
+  const [altRestaurants, setAltRestaurants] = useState([]);
+  const [loadingAlt, setLoadingAlt] = useState(false);
+
   useEffect(() => {
     fetchTripById(tripId);
   }, [tripId]);
+
+  useEffect(() => {
+    const fetchAlternatives = async () => {
+      if (!trip) return;
+      try {
+        setLoadingAlt(true);
+        // Find coordinates of first activity that has coords
+        const firstAct = (trip.activities || []).find(a => a.coordinates && a.coordinates.lat);
+        const searchLat = firstAct?.coordinates?.lat || 16.0544;
+        const searchLng = firstAct?.coordinates?.lng || 108.2022;
+
+        // Fetch alternative hotels in destination (limit increased to 30)
+        const resHotels = await getNearbyPlaces(searchLat, searchLng, trip.hotelRecommendation?.name || '', 30, 'HOTEL', trip.destination);
+        if (resHotels.success) {
+          setAltHotels(resHotels.data);
+        }
+
+        // Fetch alternative restaurants in destination (limit 30, with destination filtering)
+        const resRests = await getNearbyPlaces(searchLat, searchLng, '', 30, 'RESTAURANT', trip.destination);
+        if (resRests.success) {
+          const recommendedNames = (trip.restaurantRecommendations || []).map(r => r.name);
+          const filteredRests = resRests.data.filter(r => !recommendedNames.includes(r.name));
+          setAltRestaurants(filteredRests);
+        }
+      } catch (err) {
+        console.error('Error fetching alternatives:', err);
+      } finally {
+        setLoadingAlt(false);
+      }
+    };
+
+    fetchAlternatives();
+  }, [trip?._id, trip?.activities?.length, trip?.hotelRecommendation?.name, trip?.restaurantRecommendations?.length, trip?.destination]);
 
   const handleShare = async () => {
     const result = await shareTrip(tripId);
@@ -73,17 +111,23 @@ const TripDetailScreen = ({ route, navigation }) => {
             <Ionicons name="chevron-back" size={24} color={COLORS.white} />
           </TouchableOpacity>
           <View style={styles.heroActions}>
+            <TouchableOpacity onPress={() => navigation.navigate('Weather', { destination: trip.destination, days: dayCount, tripId: trip._id })} style={styles.heroAction}>
+              <Ionicons name="cloudy" size={18} color={COLORS.white} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Export', { tripId })} style={styles.heroAction}>
+              <Ionicons name="document-text-outline" size={18} color={COLORS.white} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('PackingList', { tripId })} style={styles.heroAction}>
-              <Ionicons name="bag-handle-outline" size={20} color={COLORS.white} />
+              <Ionicons name="bag-handle-outline" size={18} color={COLORS.white} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('EditTrip', { tripId })} style={styles.heroAction}>
-              <Ionicons name="pencil-outline" size={20} color={COLORS.white} />
+              <Ionicons name="pencil-outline" size={18} color={COLORS.white} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleShare} style={styles.heroAction}>
-              <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
+              <Ionicons name="share-social-outline" size={18} color={COLORS.white} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleDelete} style={styles.heroAction}>
-              <Ionicons name="trash-outline" size={20} color={COLORS.white} />
+              <Ionicons name="trash-outline" size={18} color={COLORS.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -125,14 +169,33 @@ const TripDetailScreen = ({ route, navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + SPACING.lg }]}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 0 && <TripTimeline trip={trip} />}
+        {activeTab === 0 && (
+          <View style={styles.tabContent}>
+            <Text style={styles.introText}>📍 Lịch trình tham quan và vui chơi AI thiết kế riêng cho chuyến đi:</Text>
+            <TripTimeline trip={trip} tripId={trip._id} />
+          </View>
+        )}
 
         {activeTab === 1 && (
           <View style={styles.tabContent}>
             {trip.hotelRecommendation ? (
-              <HotelCard hotel={trip.hotelRecommendation} />
+              <>
+                <Text style={styles.introText}>🏨 Gợi ý lưu trú / khách sạn AI đề xuất phù hợp với ngân sách của bạn:</Text>
+                <HotelCard hotel={trip.hotelRecommendation} tripId={trip._id} />
+              </>
             ) : (
               <Text style={styles.noData}>Chưa có gợi ý khách sạn</Text>
+            )}
+
+            {altHotels.length > 0 && (
+              <View style={styles.altSection}>
+                <Text style={styles.altSectionTitle}>🏨 Các lựa chọn nơi lưu trú khác tại {trip.destination}:</Text>
+                {altHotels.map((hotel, idx) => (
+                  <View key={idx} style={{ marginBottom: SPACING.md }}>
+                    <HotelCard hotel={hotel} tripId={trip._id} />
+                  </View>
+                ))}
+              </View>
             )}
           </View>
         )}
@@ -140,11 +203,23 @@ const TripDetailScreen = ({ route, navigation }) => {
         {activeTab === 2 && (
           <View style={styles.tabContent}>
             {trip.restaurantRecommendations?.length > 0 ? (
-              trip.restaurantRecommendations.map((r, i) => (
-                <RestaurantCard key={i} restaurant={r} />
-              ))
+              <>
+                <Text style={styles.introText}>🍽️ Danh sách quán ăn và ẩm thực địa phương AI khuyên bạn nên trải nghiệm:</Text>
+                {trip.restaurantRecommendations.map((r, i) => (
+                  <RestaurantCard key={i} restaurant={r} tripId={trip._id} />
+                ))}
+              </>
             ) : (
               <Text style={styles.noData}>Chưa có gợi ý nhà hàng</Text>
+            )}
+
+            {altRestaurants.length > 0 && (
+              <View style={styles.altSection}>
+                <Text style={styles.altSectionTitle}>🍽️ Quán ăn & nhà hàng ẩm thực nổi bật khác tại {trip.destination}:</Text>
+                {altRestaurants.map((rest, idx) => (
+                  <RestaurantCard key={idx} restaurant={rest} tripId={trip._id} />
+                ))}
+              </View>
             )}
           </View>
         )}
@@ -328,12 +403,36 @@ const styles = StyleSheet.create({
   tabContent: {
     gap: SPACING.sm,
   },
+  introText: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    fontStyle: 'italic',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
   noData: {
     fontSize: 14,
     color: COLORS.gray[400],
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: SPACING.xl,
+  },
+  altSection: {
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  altSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.gray[800],
+    marginBottom: 4,
+  },
+  altScroll: {
+    gap: SPACING.md,
+    paddingBottom: 8,
+  },
+  altCardContainer: {
+    width: 300,
   },
 });
 
