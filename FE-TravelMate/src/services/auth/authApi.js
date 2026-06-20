@@ -35,3 +35,12 @@ export const getProfile = async () => {
   const response = await api.get('/auth/profile');
   return response.data;
 };
+
+/**
+ * Upgrade authenticated user to premium
+ * PUT /api/auth/upgrade
+ */
+export const upgradeToPremium = async () => {
+  const response = await api.put('/auth/upgrade');
+  return response.data;
+};

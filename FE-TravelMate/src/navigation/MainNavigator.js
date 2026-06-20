@@ -29,6 +29,8 @@ import SearchPlacesScreen from '../screens/place/SearchPlacesScreen';
 import WeatherScreen from '../screens/trip/WeatherScreen';
 import ExportScreen from '../screens/trip/ExportScreen';
 import ItineraryPreviewScreen from '../screens/trip/ItineraryPreviewScreen';
+import TripJournalScreen from '../screens/trip/TripJournalScreen';
+import TripJournalDetailScreen from '../screens/trip/TripJournalDetailScreen';
 
 import { COLORS } from '../utils/constants';
 
@@ -59,6 +61,8 @@ const RootStack = () => (
     <Stack.Screen name="SearchPlaces" component={SearchPlacesScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="Weather" component={WeatherScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="Export" component={ExportScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="TripJournal" component={TripJournalScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="TripJournalDetail" component={TripJournalDetailScreen} options={{ animation: 'slide_from_right' }} />
   </Stack.Navigator>
 );
 

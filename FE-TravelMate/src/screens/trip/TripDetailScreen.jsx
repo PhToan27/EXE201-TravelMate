@@ -120,6 +120,9 @@ const TripDetailScreen = ({ route, navigation }) => {
             <TouchableOpacity onPress={() => navigation.navigate('PackingList', { tripId })} style={styles.heroAction}>
               <Ionicons name="bag-handle-outline" size={18} color={COLORS.white} />
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('TripJournal', { tripId })} style={styles.heroAction}>
+              <Ionicons name="book-outline" size={18} color={COLORS.white} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('EditTrip', { tripId })} style={styles.heroAction}>
               <Ionicons name="pencil-outline" size={18} color={COLORS.white} />
             </TouchableOpacity>
