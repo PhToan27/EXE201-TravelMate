@@ -239,8 +239,10 @@ const EditTripScreen = ({ route, navigation }) => {
   const addNearbyPlace = (place) => {
     const parsePrice = (priceVal) => {
       if (!priceVal) return 0;
-      const num = parseInt(String(priceVal).replace(/[^\d]/g, ''), 10);
-      return isNaN(num) ? 0 : num;
+      const clean = String(priceVal).toLowerCase();
+      if (clean.includes('miễn phí') || clean.includes('free')) return 0;
+      const match = clean.replace(/[.,\s]/g, '').match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
     };
 
     setEditingIndex(null);

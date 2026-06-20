@@ -56,9 +56,9 @@ const mergePlaceDetails = (initialPlace, fetchedPlace) => {
 
 const PlaceDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
-  const { placeName, tripId } = route.params || {};
+  const { placeName, tripId, place: initialPlace } = route.params || {};
   const [loading, setLoading] = useState(true);
-  const [place, setPlace] = useState(null);
+  const [place, setPlace] = useState(initialPlace || null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
 
@@ -89,7 +89,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
         if (!initialPlace) setLoading(true);
         const res = await getPlaceDetails(placeName);
         if (res.success) {
-          setPlace(res.data);
+          setPlace(mergePlaceDetails(initialPlace, res.data));
           const { lat, lng } = res.data.coordinates || {};
           if (lat && lng) {
             fetchNearby(lat, lng, res.data.name);
