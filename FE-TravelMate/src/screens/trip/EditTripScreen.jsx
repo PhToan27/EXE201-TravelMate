@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Loading from '../../components/common/Loading';
+import useTrip from '../../hooks/useTrip';
 import { ACTIVITY_CATEGORIES, COLORS, RADIUS, SPACING } from '../../utils/constants';
 import { getNearbyPlaces } from '../../services/place/placeApi';
 import { optimizeTripDay } from '../../services/trip/tripApi';
