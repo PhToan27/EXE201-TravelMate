@@ -73,6 +73,7 @@ const createTrip = async (req, res) => {
       travelStyle,
       interests,
       hotelArea,
+      tripType,
     } = req.body;
 
     if (!destination || !startDate || !endDate) {
@@ -98,6 +99,7 @@ const createTrip = async (req, res) => {
       budget: budget || 0,
       travelStyle: travelStyle || 'CHILL',
       interests: parsedInterests,
+      tripType: tripType || 'Solo',
     });
     await trip.save();
 
@@ -121,10 +123,11 @@ const createTrip = async (req, res) => {
             travelStyle: travelStyle || 'CHILL',
             interests: interests || '',
             hotelArea: hotelArea || '',
+            tripType: tripType || 'Solo',
           }
         );
       } catch (aiErr) {
-        console.error('Itinerary generation from places failed, logging error:', aiErr);
+        console.error('Itinerary generation failed, logging error:', aiErr);
         await AiLog.create({
           userId: req.user._id,
           tripId: trip._id,
@@ -136,6 +139,7 @@ const createTrip = async (req, res) => {
             budget: budget || 0,
             travelStyle: travelStyle || 'CHILL',
             interests: parsedInterests,
+            tripType: tripType || 'Solo',
           },
           status: 'FAILED',
           errorMessage: aiErr.message,
@@ -155,8 +159,9 @@ const createTrip = async (req, res) => {
           budget: budget || 0,
           travelStyle: travelStyle || 'CHILL',
           interests: parsedInterests,
+          tripType: tripType || 'Solo',
         },
-        prompt: 'Generated from places collection',
+        prompt: 'Generated itinerary',
         response: generated,
         status: 'SUCCESS',
       });
@@ -500,6 +505,7 @@ const updateTrip = async (req, res) => {
       'totalPeople',
       'travelStyle',
       'interests',
+      'tripType',
       'status',
       'isPublic',
       'packingList'
