@@ -181,7 +181,50 @@ const getNearbyPlaces = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Search places by name or address from database
+ * @route   GET /api/places/search
+ * @access  Private
+ */
+const searchPlaces = async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query;
+
+    if (!q || !String(q).trim()) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const keyword = String(q).trim();
+    const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escapeRegex(keyword), 'i');
+
+    const places = await Place.find({
+      $or: [
+        { name: regex },
+        { address: regex },
+      ],
+    })
+      .limit(Number(limit))
+      .lean();
+
+    return res.json({
+      success: true,
+      data: places,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getPlaceDetails,
   getNearbyPlaces,
+  searchPlaces,
 };
+
