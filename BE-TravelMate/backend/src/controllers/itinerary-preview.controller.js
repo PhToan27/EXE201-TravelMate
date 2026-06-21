@@ -62,11 +62,12 @@ const getPreview = async (req, res) => {
       data: preview,
     });
   } catch (error) {
-    const status = error.code === 'NO_MATCHING_PLACES' ? 404 : 500;
+    const isEmptyResult = ['NO_MATCHING_PLACES', 'INSUFFICIENT_PLACES'].includes(error.code);
+    const status = isEmptyResult ? 404 : 500;
     return res.status(status).json({
       success: false,
       message:
-        error.code === 'NO_MATCHING_PLACES'
+        isEmptyResult
           ? error.message
           : 'Chưa thể tạo gợi ý lúc này. Vui lòng thử lại sau.',
     });
