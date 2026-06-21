@@ -815,9 +815,10 @@ const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <View style={styles.formGroup}>
+              <View style={[styles.formGroup, { zIndex: 5000, position: 'relative' }]}>
                 <Text style={styles.formLabel}>Tên địa điểm</Text>
                 <View style={{ position: 'relative', zIndex: 1000 }}>
+
                   <TextInput
                     value={searchText}
                     onChangeText={(value) => {

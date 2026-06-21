@@ -300,6 +300,8 @@ const createTrip = async (req, res) => {
         category: act.category,
         transport: act.transport,
         durationMinutes: act.durationMinutes,
+        travelTimeMinutes: act.travelTimeMinutes || 0,
+        travelDistanceKm: act.travelDistanceKm || 0,
       };
     });
 
@@ -455,6 +457,8 @@ const getTripById = async (req, res) => {
       category: act.category,
       transport: act.transport,
       durationMinutes: act.durationMinutes,
+      travelTimeMinutes: act.travelTimeMinutes || 0,
+      travelDistanceKm: act.travelDistanceKm || 0,
     })).sort((a, b) => {
       if (a.day !== b.day) return a.day - b.day;
       return (a.time || '').localeCompare(b.time || '');
@@ -612,6 +616,8 @@ const updateTrip = async (req, res) => {
               locationName: act.location || 'N/A',
               durationMinutes: act.durationMinutes || 60,
               transport: act.transport ? act.transport.toUpperCase() : undefined,
+              travelTimeMinutes: Number(act.travelTimeMinutes) || 0,
+              travelDistanceKm: Number(act.travelDistanceKm) || 0,
               estimatedCost: act.cost || act.estimatedCost || 0,
             },
             { new: true }
@@ -633,6 +639,8 @@ const updateTrip = async (req, res) => {
             locationName: act.location || 'N/A',
             durationMinutes: act.durationMinutes || 60,
             transport: act.transport ? act.transport.toUpperCase() : undefined,
+            travelTimeMinutes: Number(act.travelTimeMinutes) || 0,
+            travelDistanceKm: Number(act.travelDistanceKm) || 0,
             estimatedCost: act.cost || act.estimatedCost || 0,
           });
         }
@@ -687,6 +695,8 @@ const updateTrip = async (req, res) => {
       category: act.category,
       transport: act.transport,
       durationMinutes: act.durationMinutes,
+      travelTimeMinutes: act.travelTimeMinutes || 0,
+      travelDistanceKm: act.travelDistanceKm || 0,
     })).sort((a, b) => {
       if (a.day !== b.day) return a.day - b.day;
       return (a.time || '').localeCompare(b.time || '');
