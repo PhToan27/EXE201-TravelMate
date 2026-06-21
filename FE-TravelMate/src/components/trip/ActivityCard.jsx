@@ -31,7 +31,6 @@ const getTimePeriod = (timeStr) => {
 const ActivityCard = ({ activity, isLast = false, tripId }) => {
   const navigation = useNavigation();
   const cat = ACTIVITY_CATEGORIES[activity.category] || ACTIVITY_CATEGORIES.OTHER;
-  const transport = activity.transport ? TRANSPORT_TYPES[activity.transport] : null;
   const timePeriod = getTimePeriod(activity.time);
 
   return (
@@ -82,14 +81,6 @@ const ActivityCard = ({ activity, isLast = false, tripId }) => {
 
           {/* Footer details */}
           <View style={styles.footer}>
-            {/* Transport type */}
-            {transport && (
-              <View style={styles.transportChip}>
-                <Ionicons name={transport.icon} size={12} color={COLORS.gray[500]} />
-                <Text style={styles.transportText}>{transport.label}</Text>
-              </View>
-            )}
-
             {/* Duration */}
             {activity.durationMinutes > 0 && (
               <View style={styles.detailChip}>

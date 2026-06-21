@@ -39,6 +39,13 @@ const TripDetailScreen = ({ route, navigation }) => {
   }, [tripId]);
 
   useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchTripById(tripId);
+    });
+    return unsubscribe;
+  }, [navigation, tripId]);
+
+  useEffect(() => {
     const fetchAlternatives = async () => {
       if (!trip) return;
       try {

@@ -348,6 +348,32 @@ const EditTripScreen = ({ route, navigation }) => {
     }
   }, [trip]);
 
+  const getPredecessor = (activity) => {
+    const dayActs = activities
+      .map((act, index) => ({ ...act, originalIndex: index }))
+      .filter((act) => (act.day || 1) === selectedDay)
+      .sort((a, b) => parseHour(a.time) - parseHour(b.time));
+    
+    const idx = dayActs.findIndex((a) => a.originalIndex === activity.originalIndex);
+    if (idx > 0) {
+      return dayActs[idx - 1];
+    }
+    return null;
+  };
+
+  const getSuccessor = (activity) => {
+    const dayActs = activities
+      .map((act, index) => ({ ...act, originalIndex: index }))
+      .filter((act) => (act.day || 1) === selectedDay)
+      .sort((a, b) => parseHour(a.time) - parseHour(b.time));
+    
+    const idx = dayActs.findIndex((a) => a.originalIndex === activity.originalIndex);
+    if (idx >= 0 && idx < dayActs.length - 1) {
+      return dayActs[idx + 1];
+    }
+    return null;
+  };
+
   const totalDays = trip?.totalDays || 1;
   const groupedActivities = useMemo(() => {
     const initial = PERIODS.reduce((acc, period) => ({ ...acc, [period.key]: [] }), {});
@@ -565,6 +591,8 @@ const EditTripScreen = ({ route, navigation }) => {
           onEdit={openEditModal}
           onMenu={showActivityMenu}
           onEditTransport={onEditTransport}
+          getSuccessor={getSuccessor}
+          getPredecessor={getPredecessor}
         />
 
         {nearbyPlaces.length > 0 && !isReordering && (
@@ -635,7 +663,7 @@ const EditTripScreen = ({ route, navigation }) => {
 };
 
 
-const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown, onAdd, onEdit, onMenu, onEditTransport }) => (
+const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown, onAdd, onEdit, onMenu, onEditTransport, getSuccessor, getPredecessor }) => (
   <View style={styles.section}>
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleWrap}>
@@ -649,16 +677,22 @@ const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown,
 
     {activities.map((activity, index) => {
       const items = [];
-      if (index > 0 && !isReordering) {
-        items.push(
-          <TransitionCard
-            key={`trans-${activity.clientKey || activity.originalIndex}`}
-            fromActivity={activities[index - 1]}
-            toActivity={activity}
-            onEdit={() => onEditTransport(activities[index - 1], activity)}
-          />
-        );
+      
+      // If it is the first activity of the period, check if it has a predecessor in a previous period
+      if (index === 0 && !isReordering) {
+        const predecessor = getPredecessor(activity);
+        if (predecessor) {
+          items.push(
+            <TransitionCard
+              key={`trans-prev-${activity.clientKey || activity.originalIndex}`}
+              fromActivity={predecessor}
+              toActivity={activity}
+              onEdit={() => onEditTransport(predecessor, activity)}
+            />
+          );
+        }
       }
+
       items.push(
         <ActivityEditCard
           key={activity.clientKey || activity.originalIndex}
@@ -670,6 +704,35 @@ const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown,
           onMenu={() => onMenu(activity)}
         />
       );
+
+      // Render transition after the activity:
+      // Case 1: Has a successor in the same period
+      // Case 2: Is the last activity of this period, and has a successor in a future period
+      if (!isReordering) {
+        if (index < activities.length - 1) {
+          const nextAct = activities[index + 1];
+          items.push(
+            <TransitionCard
+              key={`trans-${activity.clientKey || activity.originalIndex}`}
+              fromActivity={activity}
+              toActivity={nextAct}
+              onEdit={() => onEditTransport(activity, nextAct)}
+            />
+          );
+        } else {
+          const successor = getSuccessor(activity);
+          if (successor) {
+            items.push(
+              <TransitionCard
+                key={`trans-${activity.clientKey || activity.originalIndex}`}
+                fromActivity={activity}
+                toActivity={successor}
+                onEdit={() => onEditTransport(activity, successor)}
+              />
+            );
+          }
+        }
+      }
       return items;
     })}
 
@@ -742,17 +805,20 @@ const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [initialLocation, setInitialLocation] = useState('');
 
   useEffect(() => {
     if (visible) {
-      setSearchText(draft.location || '');
+      const loc = draft.location || '';
+      setSearchText(loc);
+      setInitialLocation(loc);
       setSearchResults([]);
       setShowDropdown(false);
     }
-  }, [visible, draft.location]);
+  }, [visible]);
 
   useEffect(() => {
-    if (!searchText.trim() || searchText === draft.location) {
+    if (!searchText.trim() || searchText === initialLocation) {
       setSearchResults([]);
       setShowDropdown(false);
       return;
@@ -774,7 +840,7 @@ const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
     }, 400);
 
     return () => clearTimeout(delayDebounce);
-  }, [searchText]);
+  }, [searchText, initialLocation]);
 
   const parsePrice = (priceVal) => {
     if (!priceVal) return 0;
@@ -795,6 +861,7 @@ const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
       description: place.introduction || '',
     }));
     setSearchText(place.name);
+    setInitialLocation(place.name);
     setSearchResults([]);
     setShowDropdown(false);
   };
@@ -1467,9 +1534,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
-    position: 'relative',
+    elevation: 5,
+    position: 'absolute',
+    top: 48,
+    left: 0,
+    right: 0,
     width: '100%',
+    zIndex: 9999,
   },
   dropdownScroll: {
     padding: 4,
