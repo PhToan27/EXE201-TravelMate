@@ -19,10 +19,37 @@ const DESTINATION_ALIASES = {
   'phu quoc': ['phu quoc', 'duong dong', 'an thoi', 'duong to'],
 };
 
+const MIN_ACTIVITIES_PER_DAY = 6;
+const MAX_ACTIVITIES_PER_DAY = 8;
+
 const TIME_SLOTS = {
-  2: ['09:00 - 11:00', '15:00 - 17:00'],
-  3: ['08:30 - 10:30', '12:00 - 13:30', '15:30 - 17:30'],
-  4: ['08:00 - 10:00', '11:30 - 13:00', '14:30 - 16:30', '18:00 - 20:00'],
+  6: [
+    '07:30 - 08:30',
+    '09:00 - 10:30',
+    '11:00 - 12:00',
+    '13:30 - 14:30',
+    '15:00 - 16:30',
+    '18:00 - 19:30',
+  ],
+  7: [
+    '07:30 - 08:30',
+    '09:00 - 10:00',
+    '10:30 - 11:30',
+    '12:00 - 13:00',
+    '14:00 - 15:00',
+    '15:30 - 17:00',
+    '18:00 - 19:30',
+  ],
+  8: [
+    '07:00 - 08:00',
+    '08:30 - 09:30',
+    '10:00 - 11:00',
+    '11:30 - 12:30',
+    '13:30 - 14:30',
+    '15:00 - 16:00',
+    '17:00 - 18:00',
+    '19:00 - 20:30',
+  ],
 };
 
 const normalizeText = (value) =>
@@ -121,11 +148,26 @@ const scorePlace = (place, { interests, perPersonDailyBudget, people }) => {
 
 const getActivityCount = ({ dayIndex, days, interests, people, budget }) => {
   const perPersonPerDay = Number(budget || 0) / Math.max(days * people, 1);
-  let count = 2;
-  if (perPersonPerDay >= 250000) count += 1;
-  if (interests.length >= 3 && dayIndex % 2 === 0) count += 1;
-  if (people >= 4 && dayIndex % 2 === 1) count += 1;
-  return Math.min(count, 4);
+  let count = MIN_ACTIVITIES_PER_DAY;
+
+  if (
+    perPersonPerDay >= 300000 ||
+    interests.length >= 3 ||
+    people >= 4 ||
+    (dayIndex + interests.length + people) % 2 === 0
+  ) {
+    count += 1;
+  }
+
+  if (
+    perPersonPerDay >= 500000 ||
+    interests.length >= 4 ||
+    (dayIndex + interests.length + people) % 3 === 0
+  ) {
+    count += 1;
+  }
+
+  return Math.min(count, MAX_ACTIVITIES_PER_DAY);
 };
 
 const toDateOnly = (value) => new Date(`${value}T00:00:00.000Z`);
@@ -206,6 +248,14 @@ const buildPreviewFromPlaces = (input, places) => {
     throw error;
   }
 
+  if (candidates.length < MIN_ACTIVITIES_PER_DAY) {
+    const error = new Error(
+      `Chưa có đủ ít nhất ${MIN_ACTIVITIES_PER_DAY} địa điểm phù hợp tại ${input.destination} để tạo lịch trình trong ngày.`
+    );
+    error.code = 'INSUFFICIENT_PLACES';
+    throw error;
+  }
+
   const perPersonDailyBudget = budget / Math.max(days * people, 1);
   const rankedPlaces = [...candidates].sort(
     (a, b) =>
@@ -215,9 +265,12 @@ const buildPreviewFromPlaces = (input, places) => {
 
   const startDate = toDateOnly(input.startDate);
   const itineraryDays = Array.from({ length: days }, (_, dayIndex) => {
-    const activityCount = getActivityCount({ dayIndex, days, interests, people, budget });
+    const activityCount = Math.min(
+      getActivityCount({ dayIndex, days, interests, people, budget }),
+      candidates.length
+    );
     const dayPlaces = choosePlacesForDay({ rankedPlaces, count: activityCount, dayIndex });
-    const slots = TIME_SLOTS[dayPlaces.length] || TIME_SLOTS[2];
+    const slots = TIME_SLOTS[dayPlaces.length] || TIME_SLOTS[MIN_ACTIVITIES_PER_DAY];
     let previousPlace;
     const activities = dayPlaces.map((place, index) => {
       const estimatedCostPerPerson = parsePrice(place.ticketPrice);

@@ -11,9 +11,9 @@ const normalizeText = (value) =>
     .replace(/\s+/g, ' ');
 
 const getPlaceType = (place) => {
-  const name = String(place.name || '').toLowerCase();
-  const category = String(place.category || '').toLowerCase();
-  const address = String(place.address || '').toLowerCase();
+  const name = normalizeText(place.name);
+  const category = normalizeText(place.category);
+  const address = normalizeText(place.address);
   const text = `${name} ${category} ${address}`;
 
   if (
@@ -23,7 +23,7 @@ const getPlaceType = (place) => {
     text.includes('resort') ||
     text.includes('nha nghi') ||
     text.includes('villa') ||
-    category === 'khách sạn'
+    category === 'khach san'
   ) {
     return 'HOTEL';
   }
@@ -40,7 +40,7 @@ const getPlaceType = (place) => {
     text.includes('am thuc') ||
     text.includes('an uong') ||
     text.includes('hai san') ||
-    category === 'ẩm thực'
+    category === 'am thuc'
   ) {
     return 'RESTAURANT';
   }
@@ -361,10 +361,36 @@ const STYLE_CATEGORY = {
   NIGHTLIFE: 'OTHER',
 };
 
-const TIME_SLOTS = ['08:00', '10:30', '14:30', '18:00'];
+const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+const TIME_SLOT_PATTERNS = [
+  ['07:30', '09:30', '11:30', '13:30', '15:30', '17:30', '19:30', '20:30'],
+  ['08:00', '10:00', '12:00', '14:30', '16:30', '18:30', '20:00', '21:00'],
+  ['07:00', '09:00', '11:00', '13:00', '15:00', '17:00', '19:00', '20:30'],
+];
+
+const MIN_DAILY_ACTIVITIES = 6;
+const MAX_DAILY_ACTIVITIES = 8;
+
+const getDailyActivityCount = () => randomInt(MIN_DAILY_ACTIVITIES, MAX_DAILY_ACTIVITIES);
+
+const shiftTime = (time, minutes) => {
+  const [hour, minute] = String(time || '08:00').split(':').map(Number);
+  const totalMinutes = Math.max(0, hour * 60 + minute + minutes);
+  const nextHour = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+  const nextMinute = String(totalMinutes % 60).padStart(2, '0');
+  return `${nextHour}:${nextMinute}`;
+};
+
+const getActivityTime = ({ dayIndex, index, dailyCount }) => {
+  const pattern = TIME_SLOT_PATTERNS[dayIndex % TIME_SLOT_PATTERNS.length];
+  const baseTime = pattern[index] || pattern[pattern.length - 1] || '18:30';
+  const jitter = dailyCount > 3 ? randomInt(-1, 1) * 15 : 0;
+  return shiftTime(baseTime, jitter);
+};
 
 const getPreferredTravelStyles = (options = {}) => {
-  const raw = normalizeText(`${options.travelStyle || ''} ${options.interests || ''}`).toUpperCase();
+  const raw = normalizeText(`${options.travelStyle || ''} ${options.interests || ''}`);
   const styles = [
     'FOOD',
     'BEACH',
@@ -375,7 +401,11 @@ const getPreferredTravelStyles = (options = {}) => {
     'PHOTOGRAPHY',
     'SHOPPING',
     'NIGHTLIFE',
-  ].filter((style) => raw.includes(style));
+  ].filter((style) => {
+    const codeMatched = raw.includes(style.toLowerCase());
+    const keywordMatched = (STYLE_KEYWORDS[style] || []).some((keyword) => raw.includes(keyword));
+    return codeMatched || keywordMatched;
+  });
   return styles.length ? styles : ['BEACH'];
 };
 
@@ -417,7 +447,7 @@ const getPlaceStyleScore = (place, preferredStyles) => {
     const matchedCount = (STYLE_KEYWORDS[style] || []).filter((keyword) =>
       text.includes(keyword)
     ).length;
-    return score + matchedCount * 3;
+    return score + matchedCount * (style === 'FOOD' ? 5 : 3);
   }, 0);
 };
 
@@ -429,15 +459,37 @@ const isDestinationMatch = (place, destination) => {
   return text.includes(destinationText) || destinationText.includes('da nang');
 };
 
+const toCoordinatePoint = (latitude, longitude) => {
+  const point = { lat: Number(latitude), lng: Number(longitude) };
+  return Number.isFinite(point.lat) && Number.isFinite(point.lng) ? point : null;
+};
+
+const hasUsableCoordinates = (place) => {
+  const coordinates = place?.coordinates || {};
+  const candidates = [
+    toCoordinatePoint(coordinates.latitude, coordinates.longitude),
+    toCoordinatePoint(coordinates.lat, coordinates.lng),
+    toCoordinatePoint(place?.latitude, place?.longitude),
+  ].filter(Boolean);
+
+  return candidates.some(
+    (point) =>
+      Math.abs(point.lat - 16.0544) >= 0.0002 ||
+      Math.abs(point.lng - 108.2022) >= 0.0002
+  );
+};
+
 const getBudgetTargetForPlace = (place, preferredStyles, budgetPlan, durationDays) => {
   const category = getActivityCategory(place, preferredStyles);
   const days = Math.max(Number(durationDays || 1), 1);
   const perDayActivityBudget = Math.floor(
     Number(budgetPlan.activitiesAndEntranceFees || 0) / days
   );
-  const perActivityBudget = Math.floor(perDayActivityBudget / 2);
+  const plannedActivityStops = preferredStyles.includes('FOOD') ? 3 : 2;
+  const perActivityBudget = Math.floor(perDayActivityBudget / plannedActivityStops);
   const perMealBudget = Math.floor(
-    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * 2, 1)
+    Number(budgetPlan.foodAndBeverage || 0) /
+      Math.max(days * (preferredStyles.includes('FOOD') ? 3 : 2), 1)
   );
 
   return category === 'FOOD' ? perMealBudget : perActivityBudget || perDayActivityBudget;
@@ -472,7 +524,7 @@ const isPlaceWithinBudget = (place, preferredStyles, budgetPlan, durationDays, p
   const totalCost = getPlaceTotalCost(place, people, preferredStyles);
 
   if (!targetCost || totalCost === null || totalCost === 0) return true;
-  return totalCost <= targetCost * 1.3;
+  return totalCost <= targetCost;
 };
 
 const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays, people) =>
@@ -482,42 +534,89 @@ const shuffleWeightedPlaces = (places, preferredStyles, budgetPlan, durationDays
       score:
         getPlaceStyleScore(place, preferredStyles) +
         getPlaceBudgetScore(place, preferredStyles, budgetPlan, durationDays, people) +
-        Number(place.rating || 4) / 5 +
+        (preferredStyles.length === 1 &&
+        preferredStyles.includes('FOOD') &&
+        getActivityCategory(place, preferredStyles) === 'FOOD'
+          ? 6
+          : 0) +
         Math.random() * 4,
     }))
     .sort((a, b) => b.score - a.score)
     .map((item) => item.place);
 
+const getPlaceKey = (place) => place?._id?.toString() || place?.name;
+
+const uniquePlacesById = (places) => {
+  const seen = new Set();
+  return places.filter((place) => {
+    const key = getPlaceKey(place);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const pickPlaces = async (destination, preferredStyles, count, budgetPlan, durationDays, people) => {
   const allPlaces = await Place.find({}).lean();
-  // Filter out hotel places from itinerary activities
-  const nonHotelPlaces = allPlaces.filter(place => getPlaceType(place) !== 'HOTEL');
+  const nonHotelPlaces = allPlaces.filter((place) => getPlaceType(place) !== 'HOTEL');
+  const coordinatePlaces = nonHotelPlaces.filter(hasUsableCoordinates);
+  const candidatePlaces =
+    coordinatePlaces.length >= Math.min(count, 3) ? coordinatePlaces : nonHotelPlaces;
 
-  const destinationPlaces = nonHotelPlaces.filter((place) => isDestinationMatch(place, destination));
-  const sourcePlaces = destinationPlaces.length ? destinationPlaces : nonHotelPlaces;
+  const destinationPlaces = candidatePlaces.filter((place) => isDestinationMatch(place, destination));
+  const sourcePlaces = destinationPlaces.length ? destinationPlaces : candidatePlaces;
   const budgetMatches = sourcePlaces.filter((place) =>
     isPlaceWithinBudget(place, preferredStyles, budgetPlan, durationDays, people)
   );
-  const budgetSource = budgetMatches.length >= Math.min(count, 3) ? budgetMatches : sourcePlaces;
+  const budgetSource =
+    budgetMatches.length >= Math.min(count, 4)
+      ? budgetMatches
+      : uniquePlacesById([...budgetMatches, ...sourcePlaces]);
 
   const styleMatches = budgetSource.filter((place) => getPlaceStyleScore(place, preferredStyles) > 0);
-  const mixedPlaces = styleMatches.length >= Math.min(count, 3) ? styleMatches : budgetSource;
+  let mixedPlaces =
+    styleMatches.length >= Math.min(count, 4)
+      ? styleMatches
+      : uniquePlacesById([...styleMatches, ...budgetSource]);
+
+  const needsNonFoodMix = getNonFoodStyles(preferredStyles).length > 0;
+  const nonFoodMatches = mixedPlaces.filter(
+    (place) => getActivityCategory(place, preferredStyles) !== 'FOOD'
+  );
+
+  if (needsNonFoodMix && nonFoodMatches.length < Math.min(3, count - 1)) {
+    mixedPlaces = uniquePlacesById([
+      ...nonFoodMatches,
+      ...budgetSource.filter((place) => getActivityCategory(place, preferredStyles) !== 'FOOD'),
+      ...mixedPlaces,
+      ...budgetSource,
+    ]);
+  }
 
   if (!mixedPlaces.length) {
     return [];
   }
 
-  const picked = [];
-  let pool = shuffleWeightedPlaces(mixedPlaces, preferredStyles, budgetPlan, durationDays, people);
+  const weightedMixedPlaces = shuffleWeightedPlaces(
+    mixedPlaces,
+    preferredStyles,
+    budgetPlan,
+    durationDays,
+    people
+  );
+  const maxCandidateCount = Math.max(count * 3, count + 10);
+  const nonFoodCandidates = weightedMixedPlaces.filter(
+    (place) => getActivityCategory(place, preferredStyles) !== 'FOOD'
+  );
+  const foodCandidates = weightedMixedPlaces.filter(
+    (place) => getActivityCategory(place, preferredStyles) === 'FOOD'
+  );
 
-  while (picked.length < count) {
-    if (!pool.length) {
-      pool = shuffleWeightedPlaces(mixedPlaces, preferredStyles, budgetPlan, durationDays, people);
-    }
-    picked.push(pool.shift());
-  }
-
-  return picked;
+  return uniquePlacesById([
+    ...nonFoodCandidates.slice(0, maxCandidateCount),
+    ...foodCandidates.slice(0, maxCandidateCount),
+    ...weightedMixedPlaces.slice(0, maxCandidateCount),
+  ]);
 };
 
 const getActivityCategory = (place, preferredStyles) => {
@@ -533,16 +632,118 @@ const getActivityCategory = (place, preferredStyles) => {
   return STYLE_CATEGORY[matchedStyle] || 'PLACE';
 };
 
+const getNonFoodStyles = (preferredStyles) =>
+  preferredStyles.filter((style) => style !== 'FOOD');
+
+const pickFromPool = (pool, usedKeys) => {
+  if (!pool.length) return null;
+
+  let index = pool.findIndex((place) => !usedKeys.has(getPlaceKey(place)));
+  if (index < 0) index = 0;
+
+  const [picked] = pool.splice(index, 1);
+  const key = getPlaceKey(picked);
+  if (key) usedKeys.add(key);
+  return picked;
+};
+
+const buildDayStyleSlots = (preferredStyles, dailyCount, dayIndex) => {
+  const nonFoodStyles = getNonFoodStyles(preferredStyles);
+  const hasFood = preferredStyles.includes('FOOD');
+
+  if (!hasFood) {
+    return Array.from(
+      { length: dailyCount },
+      (_, index) => nonFoodStyles[(index + dayIndex) % Math.max(nonFoodStyles.length, 1)] || 'OTHER'
+    );
+  }
+
+  const maxFoodStops = nonFoodStyles.length
+    ? Math.max(1, Math.min(Math.ceil(dailyCount * 0.4), dailyCount - 1))
+    : Math.max(2, Math.min(Math.ceil(dailyCount * 0.55), dailyCount - 1));
+  let foodStops = 0;
+  let nonFoodCursor = dayIndex;
+
+  return Array.from({ length: dailyCount }, (_, index) => {
+    const remainingSlots = dailyCount - index;
+    const remainingFood = maxFoodStops - foodStops;
+    const shouldUseFood =
+      remainingFood > 0 && (index === 1 || index === 3 || remainingSlots <= remainingFood);
+
+    if (shouldUseFood) {
+      foodStops += 1;
+      return 'FOOD';
+    }
+
+    const style = nonFoodStyles[nonFoodCursor % Math.max(nonFoodStyles.length, 1)] || 'OTHER';
+    nonFoodCursor += 1;
+    return style;
+  });
+};
+
+const pickDayPlaces = ({ places, preferredStyles, dailyCount, dayIndex, usedKeys }) => {
+  const shuffled = shuffleWeightedPlaces(
+    places,
+    preferredStyles,
+    { days: 1, foodAndBeverage: 0, activitiesAndEntranceFees: 0 },
+    1,
+    1
+  );
+  const pools = {
+    FOOD: shuffled.filter((place) => getActivityCategory(place, preferredStyles) === 'FOOD'),
+    OTHER: shuffled.filter((place) => getActivityCategory(place, preferredStyles) !== 'FOOD'),
+  };
+
+  getNonFoodStyles(preferredStyles).forEach((style) => {
+    pools[style] = shuffled.filter(
+      (place) =>
+        getActivityCategory(place, preferredStyles) !== 'FOOD' &&
+        getPlaceStyleScore(place, [style]) > 0
+    );
+  });
+
+  return buildDayStyleSlots(preferredStyles, dailyCount, dayIndex)
+    .map((slot) => {
+      const fallbackPool = slot === 'FOOD' ? pools.OTHER : pools.OTHER;
+      return (
+        pickFromPool(pools[slot] || [], usedKeys) ||
+        pickFromPool(fallbackPool, usedKeys) ||
+        pickFromPool(shuffled, usedKeys)
+      );
+    })
+    .filter(Boolean);
+};
+
 const getPlaceDescription = (place) => {
   const intro = String(place.introduction || '').split('.').find(Boolean);
   if (intro) return intro.trim();
   return `Khám phá ${place.name} trong lịch trình của bạn.`;
 };
 
+const parseDurationMinutes = (value, fallback) => {
+  const text = normalizeText(value);
+  const matches = text.match(/\d+/g);
+  if (!matches?.length) return fallback;
+
+  const numbers = matches.map(Number).filter(Number.isFinite);
+  if (!numbers.length) return fallback;
+
+  const average = numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
+  const parsed = text.includes('ngay') || text.includes('dem')
+    ? Math.round(average * 360)
+    : text.includes('gio')
+      ? Math.round(average * 60)
+      : Math.round(average);
+
+  return Math.min(Math.max(parsed, 30), 240);
+};
+
 const createPlaceActivity = ({
   place,
   preferredStyles,
   index,
+  dayIndex,
+  dailyCount,
   budgetPlan,
   durationDays,
   people,
@@ -554,24 +755,28 @@ const createPlaceActivity = ({
   const perDayActivityBudget = Math.floor(
     Number(budgetPlan.activitiesAndEntranceFees || 0) / days
   );
-  const perActivityBudget = Math.floor(perDayActivityBudget / 2);
+  const plannedFoodStops = preferredStyles.includes('FOOD')
+    ? Math.max(2, Math.ceil((dailyCount || MIN_DAILY_ACTIVITIES) * 0.55))
+    : Math.min(2, dailyCount || MIN_DAILY_ACTIVITIES);
+  const plannedActivityStops = Math.max((dailyCount || MIN_DAILY_ACTIVITIES) - plannedFoodStops, 1);
+  const perActivityBudget = Math.floor(perDayActivityBudget / plannedActivityStops);
   const perMealBudget = Math.floor(
-    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * 2, 1)
+    Number(budgetPlan.foodAndBeverage || 0) / Math.max(days * plannedFoodStops, 1)
   );
   const targetCost = category === 'FOOD' ? perMealBudget : perActivityBudget || perDayActivityBudget;
   const rawTotalCost =
     rawCostPerPerson === null || (category === 'FOOD' && rawCostPerPerson === 0)
       ? null
       : rawCostPerPerson * partySize;
-  const cost = targetCost
-    ? rawTotalCost === null
-      ? targetCost
-      : Math.min(rawTotalCost, targetCost)
-    : rawTotalCost || 0;
+  const cost = rawTotalCost === null ? targetCost : rawTotalCost;
 
   return {
     placeId: place._id?.toString(),
-    time: TIME_SLOTS[index] || '15:00',
+    time: getActivityTime({
+      dayIndex: dayIndex || 0,
+      index,
+      dailyCount: dailyCount || MIN_DAILY_ACTIVITIES,
+    }),
     location: place.name,
     address: place.address || '',
     coordinates: place.coordinates,
@@ -579,7 +784,7 @@ const createPlaceActivity = ({
     cost: roundToNearest(cost, 10000),
     category,
     transport: index === 0 ? 'GRAB' : 'MOTORBIKE',
-    durationMinutes: category === 'FOOD' ? 60 : 90,
+    durationMinutes: parseDurationMinutes(place.duration, category === 'FOOD' ? 60 : 90),
   };
 };
 
@@ -646,7 +851,7 @@ Quy tắc:
 1. "category" bắt buộc phải là một trong các giá trị viết hoa: "FOOD", "PLACE", "HOTEL", "TRANSPORT", "REST", "SHOPPING", "OTHER".
 2. "transport" bắt buộc phải là một trong các giá trị viết hoa: "WALKING", "BIKE", "MOTORBIKE", "CAR", "BUS", "TAXI", "GRAB", "OTHER".
 3. Giá trị cost, estimatedCostPerNight, averagePricePerPerson phải là số (Number), đơn vị là VND.
-4. "itinerary" phải chứa đúng số lượng ngày ("days"). Mỗi ngày nên có 3-4 hoạt động.
+4. "itinerary" phải chứa đúng số lượng ngày ("days"). Mỗi ngày phải có 6-8 hoạt động, ưu tiên trộn địa điểm tham quan/ăn uống/nghỉ ngơi theo sở thích và ngân sách.
 5. Ngôn ngữ của toàn bộ phản hồi phải là Tiếng Việt.`;
 };
 
@@ -725,7 +930,11 @@ const normalizeAiResponse = async (data, destination, durationDays, budget, opti
       const transport = String(act.transport || 'MOTORBIKE').toUpperCase();
       
       return {
-        time: act.time || (actIdx === 0 ? '08:00' : actIdx === 1 ? '12:00' : '18:00'),
+        time: act.time || getActivityTime({
+          dayIndex: idx,
+          index: actIdx,
+          dailyCount: Math.max(rawActivities.length, MIN_DAILY_ACTIVITIES),
+        }),
         location: act.location || act.activityName || 'Điểm tham quan',
         address: act.address || '',
         description: act.description || '',
@@ -750,6 +959,10 @@ const normalizeAiResponse = async (data, destination, durationDays, budget, opti
 
   return normalized;
 };
+
+const hasEnoughDailyActivities = (itinerary = []) =>
+  Array.isArray(itinerary) &&
+  itinerary.every((day) => (day.activities || []).length >= MIN_DAILY_ACTIVITIES);
 
 const callOpenAI = async (destination, durationDays, budget, options) => {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -840,9 +1053,11 @@ const generateItineraryFallback = async (
   const startDate = options.startDate || new Date().toISOString().split('T')[0];
   const people = Number(options.people || 1);
   const preferredStyles = getPreferredTravelStyles(options);
-  const activitiesPerDay = 3;
-  const neededPlaces = days * activitiesPerDay;
   const budgetPlan = getBudgetPlan(budget, days);
+  const dailyActivityCounts = Array.from({ length: days }, () =>
+    getDailyActivityCount()
+  );
+  const neededPlaces = dailyActivityCounts.reduce((sum, count) => sum + count, 0);
   const places = await pickPlaces(
     destination,
     preferredStyles,
@@ -856,13 +1071,18 @@ const generateItineraryFallback = async (
     throw new Error(`Khong co dia diem nao trong bang places cho "${destination}".`);
   }
 
+  const usedPlaceKeys = new Set();
   const itinerary = Array.from({ length: days }, (_, dayIndex) => {
     const date = new Date(startDate);
     date.setDate(date.getDate() + dayIndex);
-    const dayPlaces = places.slice(
-      dayIndex * activitiesPerDay,
-      dayIndex * activitiesPerDay + activitiesPerDay
-    );
+    const dailyCount = dailyActivityCounts[dayIndex] || MIN_DAILY_ACTIVITIES;
+    const dayPlaces = pickDayPlaces({
+      places,
+      preferredStyles,
+      dailyCount,
+      dayIndex,
+      usedKeys: usedPlaceKeys,
+    });
 
     return {
       day: dayIndex + 1,
@@ -874,6 +1094,8 @@ const generateItineraryFallback = async (
           place,
           preferredStyles,
           index,
+          dayIndex,
+          dailyCount,
           budgetPlan,
           durationDays: days,
           people,
@@ -960,7 +1182,10 @@ const generateItinerary = async (
       const rawRes = await callOpenAI(destination, days, budget, options);
       const normalized = await normalizeAiResponse(rawRes, destination, days, budget, options);
       normalized.aiProvider = 'openai';
-      return normalized;
+      if (hasEnoughDailyActivities(normalized.itinerary)) {
+        return normalized;
+      }
+      console.warn('OpenAI returned too few activities, falling back to places-random.');
     } catch (openaiError) {
       console.error('OpenAI Itinerary generation failed, trying Gemini:', openaiError.message);
     }
@@ -972,7 +1197,10 @@ const generateItinerary = async (
       const rawRes = await callGemini(destination, days, budget, options);
       const normalized = await normalizeAiResponse(rawRes, destination, days, budget, options);
       normalized.aiProvider = 'gemini';
-      return normalized;
+      if (hasEnoughDailyActivities(normalized.itinerary)) {
+        return normalized;
+      }
+      console.warn('Gemini returned too few activities, falling back to places-random.');
     } catch (geminiError) {
       console.error('Gemini Itinerary generation failed, falling back to local search:', geminiError.message);
     }
