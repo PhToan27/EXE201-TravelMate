@@ -20,7 +20,7 @@ const DESTINATION_ALIASES = {
 };
 
 const MIN_ACTIVITIES_PER_DAY = 6;
-const MAX_ACTIVITIES_PER_DAY = 7;
+const MAX_ACTIVITIES_PER_DAY = 8;
 
 const TIME_SLOTS = {
   6: [
@@ -39,6 +39,16 @@ const TIME_SLOTS = {
     '14:00 - 15:00',
     '15:30 - 17:00',
     '18:00 - 19:30',
+  ],
+  8: [
+    '07:00 - 08:00',
+    '08:30 - 09:30',
+    '10:00 - 11:00',
+    '11:30 - 12:30',
+    '13:30 - 14:30',
+    '15:00 - 16:00',
+    '17:00 - 18:00',
+    '19:00 - 20:30',
   ],
 };
 
@@ -138,13 +148,26 @@ const scorePlace = (place, { interests, perPersonDailyBudget, people }) => {
 
 const getActivityCount = ({ dayIndex, days, interests, people, budget }) => {
   const perPersonPerDay = Number(budget || 0) / Math.max(days * people, 1);
-  const shouldAddSeventhPoint =
+  let count = MIN_ACTIVITIES_PER_DAY;
+
+  if (
     perPersonPerDay >= 300000 ||
     interests.length >= 3 ||
     people >= 4 ||
-    (dayIndex + interests.length + people) % 2 === 0;
+    (dayIndex + interests.length + people) % 2 === 0
+  ) {
+    count += 1;
+  }
 
-  return shouldAddSeventhPoint ? MAX_ACTIVITIES_PER_DAY : MIN_ACTIVITIES_PER_DAY;
+  if (
+    perPersonPerDay >= 500000 ||
+    interests.length >= 4 ||
+    (dayIndex + interests.length + people) % 3 === 0
+  ) {
+    count += 1;
+  }
+
+  return Math.min(count, MAX_ACTIVITIES_PER_DAY);
 };
 
 const toDateOnly = (value) => new Date(`${value}T00:00:00.000Z`);

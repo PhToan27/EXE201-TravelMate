@@ -97,7 +97,7 @@ test('tạo lịch trình xem trước theo số người, ngân sách và sở 
 
   assert.equal(result.isPreview, true);
   assert.equal(result.days.length, 2);
-  assert.ok(result.days.every((day) => day.activities.length >= 6 && day.activities.length <= 7));
+  assert.ok(result.days.every((day) => day.activities.length >= 6 && day.activities.length <= 8));
   assert.ok(result.days.every((day) => new Set(day.activities.map((activity) => activity.place)).size === day.activities.length));
   assert.ok(result.days.flatMap((day) => day.activities).every((activity) => activity.estimatedCost >= 0));
   assert.ok(result.days.flatMap((day) => day.activities).some((activity) => activity.activityType === 'Ăn uống'));
