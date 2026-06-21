@@ -22,3 +22,15 @@ export const getNearbyPlaces = async (lat, lng, excludeName = '', limit = 5, typ
   });
   return response.data;
 };
+
+/**
+ * Search places by name/address keyword
+ * GET /api/places/search?q=...&limit=...
+ */
+export const searchPlaces = async (query, limit = 10) => {
+  const response = await api.get('/places/search', {
+    params: { q: query, limit },
+  });
+  return response.data;
+};
+

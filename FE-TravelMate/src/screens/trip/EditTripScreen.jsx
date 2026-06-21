@@ -16,8 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import Loading from '../../components/common/Loading';
 import useTrip from '../../hooks/useTrip';
 import { ACTIVITY_CATEGORIES, COLORS, RADIUS, SPACING } from '../../utils/constants';
-import { getNearbyPlaces } from '../../services/place/placeApi';
+import { getNearbyPlaces, searchPlaces } from '../../services/place/placeApi';
 import { optimizeTripDay } from '../../services/trip/tripApi';
+import { getNavigationEstimate } from '../../services/navigation/navigationApi';
 
 const PERIODS = [
   { key: 'morning', label: 'Sáng', title: 'Buổi Sáng', icon: 'sunny-outline', range: '05:00 - 11:59' },
@@ -26,6 +27,30 @@ const PERIODS = [
   { key: 'evening', label: 'Tối', title: 'Buổi Tối', icon: 'moon-outline', range: '18:00 - 23:59' },
 ];
 
+const TRANSPORT_MODES = {
+  WALKING: { label: 'Đi bộ', icon: 'walk-outline', color: '#10B981' },
+  BIKE: { label: 'Xe đạp', icon: 'bicycle-outline', color: '#3B82F6' },
+  MOTORBIKE: { label: 'Xe máy', icon: 'bicycle-outline', color: '#F59E0B' },
+  CAR: { label: 'Ô tô', icon: 'car-outline', color: '#EF4444' },
+  BUS: { label: 'Xe buýt', icon: 'bus-outline', color: '#8B5CF6' },
+  TAXI: { label: 'Taxi', icon: 'car-sport-outline', color: '#EC4899' },
+  GRAB: { label: 'Grab', icon: 'car-outline', color: '#10B981' },
+  OTHER: { label: 'Khác', icon: 'navigate-outline', color: '#6B7280' },
+};
+
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 const DEFAULT_ACTIVITY = {
   location: '',
   time: '08:00',
@@ -107,6 +132,54 @@ const EditTripScreen = ({ route, navigation }) => {
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+
+  const [transportModalVisible, setTransportModalVisible] = useState(false);
+  const [activeTransitionFrom, setActiveTransitionFrom] = useState(null);
+  const [activeTransitionTo, setActiveTransitionTo] = useState(null);
+
+  const onEditTransport = (fromAct, toAct) => {
+    setActiveTransitionFrom(fromAct);
+    setActiveTransitionTo(toAct);
+    setTransportModalVisible(true);
+  };
+
+  const saveTransport = ({ transport, travelTimeMinutes, travelDistanceKm }) => {
+    if (activeTransitionTo) {
+      setActivities((prev) =>
+        prev.map((item, index) =>
+          index === activeTransitionTo.originalIndex
+            ? { ...item, transport, travelTimeMinutes, travelDistanceKm }
+            : item
+        )
+      );
+    }
+    setTransportModalVisible(false);
+  };
+
+  const dayTotals = useMemo(() => {
+    const dayActs = activities.filter((a) => (a.day || 1) === selectedDay);
+    let duration = 0;
+    let travel = 0;
+    dayActs.forEach((act) => {
+      duration += Number(act.durationMinutes || 0);
+      travel += Number(act.travelTimeMinutes || 0);
+    });
+    return {
+      totalMinutes: duration + travel,
+      activityMinutes: duration,
+      travelMinutes: travel,
+    };
+  }, [activities, selectedDay]);
+
+  const formatDuration = (totalMinutes) => {
+    const hrs = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (hrs > 0) {
+      return `${hrs} giờ${mins > 0 ? ` ${mins} phút` : ''}`;
+    }
+    return `${mins} phút`;
+  };
+
 
   const fetchNearbySuggs = async () => {
     if (!trip) return;
@@ -445,6 +518,14 @@ const EditTripScreen = ({ route, navigation }) => {
           </ScrollView>
         )}
 
+        <View style={styles.daySummaryBox}>
+          <Ionicons name="time-outline" size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+          <Text style={styles.daySummaryText}>
+            Ngày {selectedDay}: Tổng thời gian {formatDuration(dayTotals.totalMinutes)}
+            {dayTotals.travelMinutes > 0 && ` (trong đó di chuyển: ${formatDuration(dayTotals.travelMinutes)})`}
+          </Text>
+        </View>
+
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionButton, optimizing && styles.actionButtonDisabled]}
@@ -483,6 +564,7 @@ const EditTripScreen = ({ route, navigation }) => {
           onAdd={openCreateModal}
           onEdit={openEditModal}
           onMenu={showActivityMenu}
+          onEditTransport={onEditTransport}
         />
 
         {nearbyPlaces.length > 0 && !isReordering && (
@@ -540,11 +622,20 @@ const EditTripScreen = ({ route, navigation }) => {
         onClose={() => setModalVisible(false)}
         onSave={saveDraft}
       />
+
+      <TransportModal
+        visible={transportModalVisible}
+        fromActivity={activeTransitionFrom}
+        toActivity={activeTransitionTo}
+        onClose={() => setTransportModalVisible(false)}
+        onSave={saveTransport}
+      />
     </KeyboardAvoidingView>
   );
 };
 
-const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown, onAdd, onEdit, onMenu }) => (
+
+const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown, onAdd, onEdit, onMenu, onEditTransport }) => (
   <View style={styles.section}>
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleWrap}>
@@ -556,17 +647,31 @@ const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown,
       </View>
     </View>
 
-    {activities.map((activity, index) => (
-      <ActivityEditCard
-        key={activity.clientKey || activity.originalIndex}
-        activity={activity}
-        isReordering={isReordering}
-        onMoveUp={() => onMoveUp(index, activities)}
-        onMoveDown={() => onMoveDown(index, activities)}
-        onPress={() => onEdit(activity)}
-        onMenu={() => onMenu(activity)}
-      />
-    ))}
+    {activities.map((activity, index) => {
+      const items = [];
+      if (index > 0 && !isReordering) {
+        items.push(
+          <TransitionCard
+            key={`trans-${activity.clientKey || activity.originalIndex}`}
+            fromActivity={activities[index - 1]}
+            toActivity={activity}
+            onEdit={() => onEditTransport(activities[index - 1], activity)}
+          />
+        );
+      }
+      items.push(
+        <ActivityEditCard
+          key={activity.clientKey || activity.originalIndex}
+          activity={activity}
+          isReordering={isReordering}
+          onMoveUp={() => onMoveUp(index, activities)}
+          onMoveDown={() => onMoveDown(index, activities)}
+          onPress={() => onEdit(activity)}
+          onMenu={() => onMenu(activity)}
+        />
+      );
+      return items;
+    })}
 
     {!isReordering && (
       <TouchableOpacity style={styles.addButton} onPress={onAdd} activeOpacity={0.8}>
@@ -576,6 +681,7 @@ const PeriodSection = ({ period, activities, isReordering, onMoveUp, onMoveDown,
     )}
   </View>
 );
+
 
 const CollapsedPeriod = ({ period, count, onPress }) => (
   <TouchableOpacity style={styles.collapsedSection} onPress={onPress} activeOpacity={0.8}>
@@ -631,105 +737,203 @@ const ActivityEditCard = ({ activity, isReordering, onMoveUp, onMoveDown, onPres
   );
 };
 
-const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <View style={styles.modalBackdrop}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalKeyboard}
-      >
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Thông tin hoạt động</Text>
-            <TouchableOpacity style={styles.iconButtonSmall} onPress={onClose}>
-              <Ionicons name="close" size={20} color={COLORS.gray[600]} />
+const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setSearchText(draft.location || '');
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+  }, [visible, draft.location]);
+
+  useEffect(() => {
+    if (!searchText.trim() || searchText === draft.location) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await searchPlaces(searchText);
+        if (res.success && Array.isArray(res.data)) {
+          setSearchResults(res.data);
+          setShowDropdown(res.data.length > 0);
+        }
+      } catch (err) {
+        console.error('Error searching places:', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchText]);
+
+  const parsePrice = (priceVal) => {
+    if (!priceVal) return 0;
+    const clean = String(priceVal).toLowerCase();
+    if (clean.includes('miễn phí') || clean.includes('free')) return 0;
+    const match = clean.replace(/[.,\s]/g, '').match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+
+  const handleSelectResult = (place) => {
+    setDraft((prev) => ({
+      ...prev,
+      location: place.name,
+      address: place.address || '',
+      category: getPlaceCategoryKey(place),
+      cost: place.ticketPrice ? String(parsePrice(place.ticketPrice)) : '0',
+      coordinates: place.coordinates || null,
+      description: place.introduction || '',
+    }));
+    setSearchText(place.name);
+    setSearchResults([]);
+    setShowDropdown(false);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalKeyboard}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Thông tin hoạt động</Text>
+              <TouchableOpacity style={styles.iconButtonSmall} onPress={onClose}>
+                <Ionicons name="close" size={20} color={COLORS.gray[600]} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Tên địa điểm</Text>
+                <View style={{ position: 'relative', zIndex: 1000 }}>
+                  <TextInput
+                    value={searchText}
+                    onChangeText={(value) => {
+                      setSearchText(value);
+                      setDraft((prev) => ({ ...prev, location: value }));
+                    }}
+                    placeholder="Ví dụ: Ngũ Hành Sơn"
+                    placeholderTextColor={COLORS.gray[400]}
+                    style={styles.formInput}
+                  />
+                  {searching && (
+                    <Text style={styles.searchingText}>Đang tìm...</Text>
+                  )}
+                  {showDropdown && searchResults.length > 0 && (
+                    <View style={styles.dropdownContainer}>
+                      <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                        {searchResults.map((place) => (
+                          <TouchableOpacity
+                            key={place._id}
+                            style={styles.dropdownItem}
+                            onPress={() => handleSelectResult(place)}
+                          >
+                            <Ionicons name="location-outline" size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.dropdownItemTitle}>{place.name}</Text>
+                              <Text style={styles.dropdownItemSubtitle} numberOfLines={1}>
+                                {place.category} • {place.address || 'Không rõ địa chỉ'}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.inputRow}>
+                <FormInput
+                  label="Bắt đầu"
+                  value={draft.time}
+                  onChangeText={(value) => setDraft((prev) => ({ ...prev, time: value }))}
+                  placeholder="08:00"
+                  style={styles.inputHalf}
+                />
+                <FormInput
+                  label="Kết thúc"
+                  value={draft.endTime}
+                  onChangeText={(value) => setDraft((prev) => ({ ...prev, endTime: value }))}
+                  placeholder="10:00"
+                  style={styles.inputHalf}
+                />
+              </View>
+              <View style={styles.inputRow}>
+                <FormInput
+                  label="Chi phí"
+                  value={draft.cost}
+                  onChangeText={(value) => setDraft((prev) => ({ ...prev, cost: value }))}
+                  placeholder="0"
+                  keyboardType="numeric"
+                  style={styles.inputHalf}
+                />
+                <FormInput
+                  label="Thời lượng"
+                  value={draft.durationMinutes}
+                  onChangeText={(value) => setDraft((prev) => ({ ...prev, durationMinutes: value }))}
+                  placeholder="120"
+                  keyboardType="numeric"
+                  style={styles.inputHalf}
+                />
+              </View>
+              <Text style={styles.formLabel}>Loại hoạt động</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryList}
+              >
+                {Object.entries(ACTIVITY_CATEGORIES).map(([key, category]) => {
+                  const selected = draft.category === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.categoryChip,
+                        selected && { borderColor: category.color, backgroundColor: `${category.color}12` },
+                      ]}
+                      onPress={() => setDraft((prev) => ({ ...prev, category: key }))}
+                    >
+                      <Ionicons name={category.icon} size={14} color={selected ? category.color : COLORS.gray[500]} />
+                      <Text style={[styles.categoryText, selected && { color: category.color }]}>
+                        {category.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <FormInput
+                label="Ghi chú"
+                value={draft.description}
+                onChangeText={(value) => setDraft((prev) => ({ ...prev, description: value }))}
+                placeholder="Mô tả ngắn cho hoạt động"
+                multiline
+                inputStyle={styles.noteInput}
+              />
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalSaveButton} onPress={onSave}>
+              <Text style={styles.modalSaveText}>Lưu hoạt động</Text>
             </TouchableOpacity>
           </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <FormInput
-              label="Tên địa điểm"
-              value={draft.location}
-              onChangeText={(value) => setDraft((prev) => ({ ...prev, location: value }))}
-              placeholder="Ví dụ: Ngũ Hành Sơn"
-            />
-            <View style={styles.inputRow}>
-              <FormInput
-                label="Bắt đầu"
-                value={draft.time}
-                onChangeText={(value) => setDraft((prev) => ({ ...prev, time: value }))}
-                placeholder="08:00"
-                style={styles.inputHalf}
-              />
-              <FormInput
-                label="Kết thúc"
-                value={draft.endTime}
-                onChangeText={(value) => setDraft((prev) => ({ ...prev, endTime: value }))}
-                placeholder="10:00"
-                style={styles.inputHalf}
-              />
-            </View>
-            <View style={styles.inputRow}>
-              <FormInput
-                label="Chi phí"
-                value={draft.cost}
-                onChangeText={(value) => setDraft((prev) => ({ ...prev, cost: value }))}
-                placeholder="0"
-                keyboardType="numeric"
-                style={styles.inputHalf}
-              />
-              <FormInput
-                label="Thời lượng"
-                value={draft.durationMinutes}
-                onChangeText={(value) => setDraft((prev) => ({ ...prev, durationMinutes: value }))}
-                placeholder="120"
-                keyboardType="numeric"
-                style={styles.inputHalf}
-              />
-            </View>
-            <Text style={styles.formLabel}>Loại hoạt động</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryList}
-            >
-              {Object.entries(ACTIVITY_CATEGORIES).map(([key, category]) => {
-                const selected = draft.category === key;
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    style={[
-                      styles.categoryChip,
-                      selected && { borderColor: category.color, backgroundColor: `${category.color}12` },
-                    ]}
-                    onPress={() => setDraft((prev) => ({ ...prev, category: key }))}
-                  >
-                    <Ionicons name={category.icon} size={14} color={selected ? category.color : COLORS.gray[500]} />
-                    <Text style={[styles.categoryText, selected && { color: category.color }]}>
-                      {category.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            <FormInput
-              label="Ghi chú"
-              value={draft.description}
-              onChangeText={(value) => setDraft((prev) => ({ ...prev, description: value }))}
-              placeholder="Mô tả ngắn cho hoạt động"
-              multiline
-              inputStyle={styles.noteInput}
-            />
-          </ScrollView>
-
-          <TouchableOpacity style={styles.modalSaveButton} onPress={onSave}>
-            <Text style={styles.modalSaveText}>Lưu hoạt động</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </View>
-  </Modal>
-);
 
 const FormInput = ({ label, style, inputStyle, ...props }) => (
   <View style={[styles.formGroup, style]}>
@@ -1167,6 +1371,349 @@ const styles = StyleSheet.create({
     color: COLORS.gray[500],
     marginTop: 2,
   },
+  daySummaryBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderRadius: RADIUS.md,
+    padding: 12,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  daySummaryText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#C2410C',
+  },
+  transitionWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingLeft: 12,
+  },
+  transitionLineContainer: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transitionLine: {
+    width: 2,
+    height: 32,
+    backgroundColor: COLORS.gray[200],
+    borderStyle: 'dashed',
+    borderRadius: 1,
+  },
+  transitionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    marginLeft: 10,
+  },
+  transitionIconWrapper: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  transitionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.gray[600],
+  },
+  transportRouteLabel: {
+    fontSize: 13,
+    color: COLORS.gray[600],
+    marginBottom: 6,
+  },
+  estimateButton: {
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  estimateButtonText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  searchingText: {
+    fontSize: 11,
+    color: COLORS.gray[400],
+    position: 'absolute',
+    right: 12,
+    top: 15,
+  },
+  dropdownContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+    marginTop: 4,
+    maxHeight: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    position: 'relative',
+    width: '100%',
+  },
+  dropdownScroll: {
+    padding: 4,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[50],
+  },
+  dropdownItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  dropdownItemSubtitle: {
+    fontSize: 11,
+    color: COLORS.gray[500],
+    marginTop: 2,
+  },
 });
 
+const TransitionCard = ({ fromActivity, toActivity, onEdit }) => {
+  const modeKey = toActivity.transport || 'OTHER';
+  const mode = TRANSPORT_MODES[modeKey] || TRANSPORT_MODES.OTHER;
+  const timeText = toActivity.travelTimeMinutes ? formatTransitionTime(toActivity.travelTimeMinutes) : '';
+  const distText = toActivity.travelDistanceKm ? `${toActivity.travelDistanceKm} km` : '';
+
+  const label = [timeText, distText].filter(Boolean).join(' • ');
+
+  return (
+    <View style={styles.transitionWrapper}>
+      <View style={styles.transitionLineContainer}>
+        <View style={styles.transitionLine} />
+      </View>
+      <TouchableOpacity style={styles.transitionCard} onPress={onEdit} activeOpacity={0.85}>
+        <View style={[styles.transitionIconWrapper, { backgroundColor: `${mode.color}15` }]}>
+          <Ionicons name={mode.icon} size={15} color={mode.color} />
+        </View>
+        <Text style={styles.transitionText}>
+          {mode.label} {label ? `(${label})` : 'chưa có thông tin di chuyển'}
+        </Text>
+        <Ionicons name="pencil-sharp" size={11} color={COLORS.gray[400]} style={{ marginLeft: 6 }} />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const formatTransitionTime = (minutes) => {
+  if (!minutes) return '';
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hrs > 0) {
+    return `${hrs}h${mins > 0 ? ` ${mins}m` : ''}`;
+  }
+  return `${mins}m`;
+};
+
+const TransportModal = ({ visible, fromActivity, toActivity, onClose, onSave }) => {
+  const [transport, setTransport] = useState('OTHER');
+  const [hours, setHours] = useState('0');
+  const [minutes, setMinutes] = useState('0');
+  const [distance, setDistance] = useState('0');
+  const [estimating, setEstimating] = useState(false);
+
+  useEffect(() => {
+    if (visible && toActivity) {
+      setTransport(toActivity.transport || 'OTHER');
+      const totalMinutes = Number(toActivity.travelTimeMinutes || 0);
+      setHours(String(Math.floor(totalMinutes / 60)));
+      setMinutes(String(totalMinutes % 60));
+      setDistance(String(toActivity.travelDistanceKm || 0));
+    }
+  }, [visible, toActivity]);
+
+  const mapToEstimateMode = (mode) => {
+    if (mode === 'WALKING') return 'foot';
+    if (mode === 'BIKE') return 'bike';
+    if (mode === 'CAR' || mode === 'TAXI' || mode === 'GRAB') return 'car';
+    return 'motorcycle'; // default
+  };
+
+  const handleEstimate = async () => {
+    const fromCoords = fromActivity?.coordinates;
+    const toCoords = toActivity?.coordinates;
+
+    const fromLat = fromCoords?.lat || fromCoords?.latitude;
+    const fromLng = fromCoords?.lng || fromCoords?.longitude;
+    const toLat = toCoords?.lat || toCoords?.latitude;
+    const toLng = toCoords?.lng || toCoords?.longitude;
+
+    if (!fromLat || !fromLng || !toLat || !toLng) {
+      Alert.alert('Thông tin', 'Cần có tọa độ địa lý của cả hai địa điểm để ước tính khoảng cách.');
+      return;
+    }
+
+    setEstimating(true);
+    try {
+      const res = await getNavigationEstimate({
+        fromLat,
+        fromLng,
+        toLat,
+        toLng,
+        vehicle: mapToEstimateMode(transport),
+      });
+
+      if (res.success && res.data) {
+        const estMinutes = res.data.durationMinutes || 0;
+        setHours(String(Math.floor(estMinutes / 60)));
+        setMinutes(String(estMinutes % 60));
+        setDistance(String(res.data.distanceKm || 0));
+      } else {
+        Alert.alert('Lỗi', 'Không thể tính toán dẫn đường.');
+      }
+    } catch (err) {
+      console.error('Estimate route error:', err);
+      const dist = getDistance(fromLat, fromLng, toLat, toLng) * 1.3;
+      const speed = transport === 'WALKING' ? 4.5 : transport === 'BIKE' ? 15 : transport === 'CAR' ? 40 : 30;
+      const estMinutes = Math.max(1, Math.round((dist / speed) * 60));
+      setHours(String(Math.floor(estMinutes / 60)));
+      setMinutes(String(estMinutes % 60));
+      setDistance(String(dist.toFixed(1)));
+    } finally {
+      setEstimating(false);
+    }
+  };
+
+  const handleSave = () => {
+    const totalMinutes = (parseInt(hours, 10) || 0) * 60 + (parseInt(minutes, 10) || 0);
+    onSave({
+      transport,
+      travelTimeMinutes: totalMinutes,
+      travelDistanceKm: parseFloat(distance) || 0,
+    });
+  };
+
+  const showEstimateButton = !!(
+    (fromActivity?.coordinates?.lat || fromActivity?.coordinates?.latitude) &&
+    (toActivity?.coordinates?.lat || toActivity?.coordinates?.latitude)
+  );
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalKeyboard}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chặng di chuyển</Text>
+              <TouchableOpacity style={styles.iconButtonSmall} onPress={onClose}>
+                <Ionicons name="close" size={20} color={COLORS.gray[600]} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.transportRouteLabel}>
+                Từ: <Text style={{fontWeight: '700'}}>{fromActivity?.location || 'Địa điểm trước'}</Text>
+              </Text>
+              <Text style={[styles.transportRouteLabel, { marginBottom: 16 }]}>
+                Đến: <Text style={{fontWeight: '700'}}>{toActivity?.location || 'Địa điểm sau'}</Text>
+              </Text>
+
+              <Text style={styles.formLabel}>Phương tiện di chuyển</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryList}
+              >
+                {Object.entries(TRANSPORT_MODES).map(([key, item]) => {
+                  const selected = transport === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.categoryChip,
+                        selected && { borderColor: item.color, backgroundColor: `${item.color}12` },
+                      ]}
+                      onPress={() => setTransport(key)}
+                    >
+                      <Ionicons name={item.icon} size={14} color={selected ? item.color : COLORS.gray[500]} />
+                      <Text style={[styles.categoryText, selected && { color: item.color }]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={styles.inputRow}>
+                <FormInput
+                  label="Thời gian (Giờ)"
+                  value={hours}
+                  onChangeText={setHours}
+                  placeholder="0"
+                  keyboardType="numeric"
+                  style={styles.inputHalf}
+                />
+                <FormInput
+                  label="Thời gian (Phút)"
+                  value={minutes}
+                  onChangeText={setMinutes}
+                  placeholder="30"
+                  keyboardType="numeric"
+                  style={styles.inputHalf}
+                />
+              </View>
+
+              <View style={styles.inputRow}>
+                <FormInput
+                  label="Khoảng cách (km)"
+                  value={distance}
+                  onChangeText={setDistance}
+                  placeholder="0"
+                  keyboardType="numeric"
+                  style={styles.inputHalf}
+                />
+                <View style={[styles.inputHalf, { justifyContent: 'flex-end', paddingBottom: 16 }]}>
+                  {showEstimateButton && (
+                    <TouchableOpacity
+                      style={[styles.estimateButton, estimating && styles.actionButtonDisabled]}
+                      onPress={handleEstimate}
+                      disabled={estimating}
+                    >
+                      <Ionicons name="calculator-outline" size={16} color={COLORS.white} />
+                      <Text style={styles.estimateButtonText}>
+                        {estimating ? 'Đang tính...' : 'Tự động ước tính'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalSaveButton} onPress={handleSave}>
+              <Text style={styles.modalSaveText}>Lưu chặng di chuyển</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
+
 export default EditTripScreen;
+

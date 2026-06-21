@@ -12,3 +12,17 @@ export const getNavigationToPlace = async (placeId, { fromLat, fromLng, vehicle 
 
   return response.data;
 };
+
+export const getNavigationEstimate = async ({ fromLat, fromLng, toLat, toLng, vehicle = 'motorcycle' }) => {
+  const response = await api.get('/navigation/estimate', {
+    params: {
+      fromLat,
+      fromLng,
+      toLat,
+      toLng,
+      vehicle,
+    },
+  });
+  return response.data;
+};
+

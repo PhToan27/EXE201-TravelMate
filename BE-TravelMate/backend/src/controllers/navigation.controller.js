@@ -54,6 +54,48 @@ const getNavigationToPlace = async (req, res) => {
   }
 };
 
+const getNavigationEstimate = async (req, res) => {
+  try {
+    const { fromLat, fromLng, toLat, toLng, vehicle = 'motorcycle' } = req.query;
+
+    if (!fromLat || !fromLng || !toLat || !toLng) {
+      return res.status(400).json({
+        success: false,
+        message: 'Yêu cầu cung cấp đầy đủ tọa độ đi (fromLat, fromLng) và đến (toLat, toLng)',
+      });
+    }
+
+    const origin = { latitude: Number(fromLat), longitude: Number(fromLng) };
+    const dummyPlace = {
+      coordinates: {
+        lat: Number(toLat),
+        lng: Number(toLng),
+      }
+    };
+
+    const data = await navigationService.getNavigationToPlace({
+      place: dummyPlace,
+      origin,
+      vehicle,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        distanceKm: data.distanceKm,
+        durationMinutes: data.durationMinutes,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getNavigationToPlace,
+  getNavigationEstimate,
 };
+
