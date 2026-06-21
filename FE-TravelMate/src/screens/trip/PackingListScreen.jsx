@@ -34,7 +34,7 @@ const PACKING_SECTIONS = [
     icon: 'document-text-outline',
     items: [
       { id: 'cccd', name: 'CCCD / Hộ chiếu' },
-      { id: 'booking', name: 'Xác nhận khách sạn' },
+      { id: 'booking', name: 'Xác nhận nơi ở' },
       { id: 'insurance', name: 'Bảo hiểm du lịch' },
     ],
   },

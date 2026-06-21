@@ -144,8 +144,8 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     const cat = String(place.category || '').toLowerCase();
     if (cat.includes('khách sạn') || cat.includes('khach san') || cat.includes('hotel') || cat.includes('homestay') || cat.includes('resort')) {
       Alert.alert(
-        'Thêm khách sạn',
-        `Bạn có muốn chọn "${place.name}" làm nơi lưu trú cho chuyến đi không?`,
+        'Thêm nơi ở',
+        `Bạn có muốn chọn "${place.name}" làm nơi ở cho chuyến đi không?`,
         [
           { text: 'Hủy', style: 'cancel' },
           {
@@ -163,9 +163,9 @@ const PlaceDetailScreen = ({ route, navigation }) => {
                 };
                 const res = await updateTrip(tripId, { hotelRecommendation: hotelRec });
                 if (res.success) {
-                  Alert.alert('Thành công', `Đã đặt "${place.name}" làm khách sạn của chuyến đi!`);
+                  Alert.alert('Thành công', `Đã đặt "${place.name}" làm nơi ở của chuyến đi!`);
                 } else {
-                  Alert.alert('Lỗi', res.message || 'Không thể cập nhật khách sạn.');
+                  Alert.alert('Lỗi', res.message || 'Không thể cập nhật nơi ở.');
                 }
               } catch (err) {
                 Alert.alert('Lỗi', err.message);
@@ -178,7 +178,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
       );
     } else if (cat.includes('ẩm thực') || cat.includes('am thuc') || cat.includes('nhà hàng') || cat.includes('quán ăn') || cat.includes('cafe')) {
       Alert.alert(
-        'Thêm nhà hàng',
+        'Thêm ăn uống',
         'Bạn muốn thêm địa điểm ăn uống này vào danh sách nào?',
         [
           { text: 'Hủy', style: 'cancel' },
@@ -197,7 +197,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
                 };
                 const currentRest = trip?.restaurantRecommendations || [];
                 if (currentRest.some(r => r.name === place.name)) {
-                  Alert.alert('Thông báo', 'Nhà hàng này đã có trong danh sách gợi ý.');
+                  Alert.alert('Thông báo', 'Địa điểm ăn uống này đã có trong danh sách gợi ý.');
                   return;
                 }
                 const res = await updateTrip(tripId, {

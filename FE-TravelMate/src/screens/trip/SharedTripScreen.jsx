@@ -80,7 +80,7 @@ const SharedTripScreen = ({ route, navigation }) => {
             <TripTimeline trip={trip} />
             {trip.hotelRecommendation && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Khách sạn gợi ý</Text>
+                <Text style={styles.sectionTitle}>Nơi ở gợi ý</Text>
                 <HotelCard hotel={trip.hotelRecommendation} />
               </View>
             )}

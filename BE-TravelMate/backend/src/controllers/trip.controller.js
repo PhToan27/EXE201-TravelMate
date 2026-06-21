@@ -5,6 +5,7 @@ const Activity = require('../models/Activity');
 const HotelSuggestion = require('../models/HotelSuggestion');
 const RestaurantSuggestion = require('../models/RestaurantSuggestion');
 const BudgetBreakdown = require('../models/BudgetBreakdown');
+const Expense = require('../models/Expense');
 const ShareTrip = require('../models/ShareTrip');
 const MapRoute = require('../models/MapRoute');
 const AiLog = require('../models/AiLog');
@@ -803,6 +804,7 @@ const deleteTrip = async (req, res) => {
     await HotelSuggestion.deleteMany({ tripId: trip._id });
     await RestaurantSuggestion.deleteMany({ tripId: trip._id });
     await BudgetBreakdown.deleteMany({ tripId: trip._id });
+    await Expense.deleteMany({ tripId: trip._id });
     await ShareTrip.deleteMany({ tripId: trip._id });
     await MapRoute.deleteMany({ tripId: trip._id });
     await AiLog.deleteMany({ tripId: trip._id });

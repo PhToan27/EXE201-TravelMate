@@ -37,7 +37,7 @@ export const getBudgetChartData = (trip) => {
   const categoryLabels = {
     FOOD: 'Ăn uống',
     PLACE: 'Tham quan',
-    HOTEL: 'Khách sạn',
+    HOTEL: 'Nơi ở',
     TRANSPORT: 'Di chuyển',
     REST: 'Nghỉ ngơi',
     SHOPPING: 'Mua sắm',

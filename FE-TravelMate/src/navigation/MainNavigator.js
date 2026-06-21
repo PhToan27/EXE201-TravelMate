@@ -14,6 +14,7 @@ import SharedTripScreen from '../screens/trip/SharedTripScreen';
 import HotelSuggestionScreen from '../screens/hotel/HotelSuggestionScreen';
 import RestaurantSuggestionScreen from '../screens/restaurant/RestaurantSuggestionScreen';
 import BudgetBreakdownScreen from '../screens/budget/BudgetBreakdownScreen';
+import ExpenseScreen from '../screens/expense/ExpenseScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import PlaceDetailScreen from '../screens/trip/PlaceDetailScreen';
@@ -49,6 +50,7 @@ const RootStack = () => (
     <Stack.Screen name="HotelSuggestion" component={HotelSuggestionScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="RestaurantSuggestion" component={RestaurantSuggestionScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="BudgetBreakdown" component={BudgetBreakdownScreen} options={{ animation: 'slide_from_right' }} />
+    <Stack.Screen name="ExpenseManager" component={ExpenseScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} options={{ animation: 'slide_from_right' }} />
     <Stack.Screen name="RouteMap" component={RouteMapScreen} options={{ animation: 'slide_from_right' }} />
@@ -98,7 +100,7 @@ const TabNavigator = () => (
     <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Trang chủ' }} />
     <Tab.Screen name="SavedTrips" component={SavedTripsScreen} options={{ tabBarLabel: 'Chuyến đi' }} />
     <Tab.Screen name="Community" component={CommunityScreen} options={{ tabBarLabel: 'Cộng đồng' }} />
-    <Tab.Screen name="Expenses" component={ExpensesPlaceholder} options={{ tabBarLabel: 'Chi phí' }} />
+    <Tab.Screen name="Expenses" component={ExpenseScreen} options={{ tabBarLabel: 'Chi phí' }} />
     <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
   </Tab.Navigator>
 );

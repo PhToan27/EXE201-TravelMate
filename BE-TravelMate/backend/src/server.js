@@ -37,6 +37,7 @@ app.use('/api/posts', require('./routes/post.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/weather', require('./routes/weather.routes'));
 app.use('/api', require('./routes/journal.routes'));
+app.use('/api', require('./routes/expense.routes'));
 
 
 

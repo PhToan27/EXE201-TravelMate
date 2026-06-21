@@ -22,7 +22,7 @@ import { formatDateRange, getDayCount } from '../../utils/dateUtils';
 import { formatVND } from '../../utils/currencyUtils';
 import { getNearbyPlaces } from '../../services/place/placeApi';
 
-const TABS = ['Lịch trình', 'Khách sạn', 'Nhà hàng', 'Ngân sách'];
+const TABS = ['Lịch trình', 'Nơi ở', 'Ăn uống', 'Ngân sách'];
 
 const TripDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
@@ -183,11 +183,11 @@ const TripDetailScreen = ({ route, navigation }) => {
           <View style={styles.tabContent}>
             {trip.hotelRecommendation ? (
               <>
-                <Text style={styles.introText}>🏨 Gợi ý lưu trú / khách sạn AI đề xuất phù hợp với ngân sách của bạn:</Text>
+                <Text style={styles.introText}>🏨 Gợi ý nơi ở phù hợp với ngân sách của bạn:</Text>
                 <HotelCard hotel={trip.hotelRecommendation} tripId={trip._id} />
               </>
             ) : (
-              <Text style={styles.noData}>Chưa có gợi ý khách sạn</Text>
+              <Text style={styles.noData}>Chưa có gợi ý nơi ở</Text>
             )}
 
             {altHotels.length > 0 && (
@@ -207,18 +207,18 @@ const TripDetailScreen = ({ route, navigation }) => {
           <View style={styles.tabContent}>
             {trip.restaurantRecommendations?.length > 0 ? (
               <>
-                <Text style={styles.introText}>🍽️ Danh sách quán ăn và ẩm thực địa phương AI khuyên bạn nên trải nghiệm:</Text>
+                <Text style={styles.introText}>🍽️ Danh sách ăn uống địa phương gợi ý cho chuyến đi:</Text>
                 {trip.restaurantRecommendations.map((r, i) => (
                   <RestaurantCard key={i} restaurant={r} tripId={trip._id} />
                 ))}
               </>
             ) : (
-              <Text style={styles.noData}>Chưa có gợi ý nhà hàng</Text>
+              <Text style={styles.noData}>Chưa có gợi ý ăn uống</Text>
             )}
 
             {altRestaurants.length > 0 && (
               <View style={styles.altSection}>
-                <Text style={styles.altSectionTitle}>🍽️ Quán ăn & nhà hàng ẩm thực nổi bật khác tại {trip.destination}:</Text>
+                <Text style={styles.altSectionTitle}>🍽️ Địa điểm ăn uống nổi bật khác tại {trip.destination}:</Text>
                 {altRestaurants.map((rest, idx) => (
                   <RestaurantCard key={idx} restaurant={rest} tripId={trip._id} />
                 ))}
@@ -229,7 +229,7 @@ const TripDetailScreen = ({ route, navigation }) => {
 
         {activeTab === 3 && (
           <View style={styles.tabContent}>
-            <BudgetSummary trip={trip} />
+            <BudgetSummary trip={trip} onManageExpenses={() => navigation.navigate('ExpenseManager', { tripId: trip._id })} />
           </View>
         )}
       </ScrollView>
@@ -249,12 +249,16 @@ const metaStyles = StyleSheet.create({
   label: { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
 });
 
-const BudgetSummary = ({ trip }) => {
+const BudgetSummary = ({ trip, onManageExpenses }) => {
   const stats = trip.budgetStats;
   const breakdown = trip.budgetBreakdown;
 
   return (
     <View>
+      <TouchableOpacity style={bStyles.manageButton} onPress={onManageExpenses} activeOpacity={0.85}>
+        <Ionicons name="receipt-outline" size={18} color={COLORS.white} />
+        <Text style={bStyles.manageButtonText}>Quản lý chi phí và bill</Text>
+      </TouchableOpacity>
       {stats && (
         <View style={bStyles.card}>
           <Text style={bStyles.title}>Tổng quan</Text>
@@ -291,6 +295,21 @@ const BudgetRow = ({ label, value, highlight, color }) => (
 );
 
 const bStyles = StyleSheet.create({
+  manageButton: {
+    minHeight: 48,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
+  manageButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
   card: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,

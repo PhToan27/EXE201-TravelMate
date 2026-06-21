@@ -25,21 +25,21 @@ const HotelSuggestionScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Header title="Gợi ý khách sạn" onBack={() => navigation.goBack()} />
+      <Header title="Gợi ý nơi ở" onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + SPACING.lg }]}
         showsVerticalScrollIndicator={false}
       >
         {hotel ? (
           <>
-            <Text style={styles.intro}>Khách sạn AI gợi ý dành cho chuyến đi của bạn:</Text>
+            <Text style={styles.intro}>Nơi ở gợi ý dành cho chuyến đi của bạn:</Text>
             <HotelCard hotel={hotel} />
           </>
         ) : (
           <EmptyState
             icon="bed-outline"
-            title="Chưa có gợi ý khách sạn"
-            subtitle="Tạo chuyến đi với AI để nhận gợi ý khách sạn phù hợp"
+            title="Chưa có gợi ý nơi ở"
+            subtitle="Tạo chuyến đi để nhận gợi ý nơi ở phù hợp"
           />
         )}
       </ScrollView>

@@ -26,15 +26,15 @@ const RestaurantSuggestionScreen = ({ route, navigation }) => {
   return (
     <View style={styles.container}>
       <Header
-        title="Gợi ý nhà hàng"
+        title="Gợi ý ăn uống"
         subtitle={`${restaurants.length} địa điểm`}
         onBack={() => navigation.goBack()}
       />
       {restaurants.length === 0 ? (
         <EmptyState
           icon="restaurant-outline"
-          title="Chưa có gợi ý nhà hàng"
-          subtitle="Tạo chuyến đi với AI để nhận gợi ý ăn uống"
+          title="Chưa có gợi ý ăn uống"
+          subtitle="Tạo chuyến đi để nhận gợi ý ăn uống"
         />
       ) : (
         <FlatList
@@ -42,7 +42,7 @@ const RestaurantSuggestionScreen = ({ route, navigation }) => {
           keyExtractor={(_, i) => String(i)}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + SPACING.lg }]}
           ListHeaderComponent={
-            <Text style={styles.intro}>Nhà hàng AI gợi ý dành cho chuyến đi của bạn:</Text>
+            <Text style={styles.intro}>Địa điểm ăn uống gợi ý dành cho chuyến đi của bạn:</Text>
           }
           renderItem={({ item }) => <RestaurantCard restaurant={item} />}
         />

@@ -82,7 +82,7 @@ export const RADIUS = {
 export const ACTIVITY_CATEGORIES = {
   FOOD: { label: 'Ăn uống', color: '#F59E0B', icon: 'restaurant' },
   PLACE: { label: 'Địa điểm', color: '#3B82F6', icon: 'location' },
-  HOTEL: { label: 'Khách sạn', color: '#8B5CF6', icon: 'bed' },
+  HOTEL: { label: 'Nơi ở', color: '#8B5CF6', icon: 'bed' },
   TRANSPORT: { label: 'Di chuyển', color: '#10B981', icon: 'car' },
   REST: { label: 'Nghỉ ngơi', color: '#6B7280', icon: 'moon' },
   SHOPPING: { label: 'Mua sắm', color: '#EC4899', icon: 'bag' },

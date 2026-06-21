@@ -315,7 +315,7 @@ const ExportScreen = ({ route, navigation }) => {
             <p><strong>Ngày kết thúc:</strong> ${new Date(trip.endDate).toLocaleDateString('vi-VN')}</p>
           </div>
           <div class="info-card">
-            <h4>Gợi ý khách sạn</h4>
+            <h4>Gợi ý nơi ở</h4>
             ${trip.hotelRecommendation ? `
               <p><strong>Tên:</strong> ${trip.hotelRecommendation.name}</p>
               <p><strong>Khu vực:</strong> ${trip.hotelRecommendation.address}</p>
@@ -335,7 +335,7 @@ const ExportScreen = ({ route, navigation }) => {
           <tbody>
             ${trip.budgetBreakdown ? `
               <tr>
-                <td>Lưu trú (Khách sạn)</td>
+                <td>Nơi ở</td>
                 <td>${formatVND(trip.budgetBreakdown.accommodation)}</td>
               </tr>
               <tr>
@@ -445,7 +445,7 @@ const ExportScreen = ({ route, navigation }) => {
             <PreviewRow label="Số thành viên" value={`${trip.totalPeople || 1} người`} />
             <PreviewRow label="Loại chuyến đi" value={trip.tripType || 'Solo'} />
             <PreviewRow label="Tổng ngân sách" value={formatVND(trip.budget)} />
-            <PreviewRow label="Gợi ý khách sạn" value={trip.hotelRecommendation?.name || 'Không có'} />
+            <PreviewRow label="Gợi ý nơi ở" value={trip.hotelRecommendation?.name || 'Không có'} />
           </View>
         </View>
 
