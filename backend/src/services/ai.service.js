@@ -981,6 +981,120 @@ const generateItinerary = async (
   return generateItineraryFallback(destination, days, budget, preferences, options);
 };
 
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const getCoords = (act) => {
+  if (act.coordinates && typeof act.coordinates.lat === 'number' && typeof act.coordinates.lng === 'number') {
+    return act.coordinates;
+  }
+  if (act.location && typeof act.location.lat === 'number' && typeof act.location.lng === 'number') {
+    return act.location;
+  }
+  return null;
+};
+
+const optimizeRoute = (activities = []) => {
+  if (!Array.isArray(activities) || activities.length <= 2) {
+    return {
+      activities,
+      stats: { originalDistance: 0, optimizedDistance: 0, distanceSaved: 0, timeSavedMinutes: 0 },
+    };
+  }
+
+  // Calculate total route distance for activities with coordinates in their current order
+  const getRouteDistance = (list) => {
+    let total = 0;
+    let prev = null;
+    for (const act of list) {
+      const coords = getCoords(act);
+      if (coords) {
+        if (prev) {
+          total += getDistance(prev.lat, prev.lng, coords.lat, coords.lng);
+        }
+        prev = coords;
+      }
+    }
+    return total;
+  };
+
+  const originalDistance = getRouteDistance(activities);
+
+  // Group activities based on coordinate availability
+  const withCoords = activities.filter(a => getCoords(a) !== null);
+  const withoutCoords = activities.filter(a => getCoords(a) === null);
+
+  if (withCoords.length <= 2) {
+    return {
+      activities,
+      stats: {
+        originalDistance: Number(originalDistance.toFixed(2)),
+        optimizedDistance: Number(originalDistance.toFixed(2)),
+        distanceSaved: 0,
+        timeSavedMinutes: 0,
+      },
+    };
+  }
+
+  // TSP: Start from the first activity, permute the rest to find the shortest path
+  const start = withCoords[0];
+  const candidates = withCoords.slice(1);
+  let bestPath = [start, ...candidates];
+  let minDistance = Infinity;
+
+  const permute = (arr, memo = []) => {
+    if (arr.length === 0) {
+      let dist = 0;
+      let prev = getCoords(start);
+      for (const curr of memo) {
+        const currCoords = getCoords(curr);
+        dist += getDistance(prev.lat, prev.lng, currCoords.lat, currCoords.lng);
+        prev = currCoords;
+      }
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestPath = [start, ...memo];
+      }
+      return;
+    }
+    // Safety cap: permute at most 8 items to prevent CPU locking
+    for (let i = 0; i < Math.min(arr.length, 8); i++) {
+      const curr = arr.slice();
+      const next = curr.splice(i, 1);
+      permute(curr.slice(), memo.concat(next));
+    }
+  };
+
+  permute(candidates);
+
+  const optimizedDistance = getRouteDistance(bestPath);
+  const distanceSaved = Math.max(originalDistance - optimizedDistance, 0);
+  const timeSavedMinutes = Math.round(distanceSaved * 2); // 30 km/h is 2 mins/km
+
+  return {
+    activities: [...bestPath, ...withoutCoords],
+    stats: {
+      originalDistance: Number(originalDistance.toFixed(2)),
+      optimizedDistance: Number(optimizedDistance.toFixed(2)),
+      distanceSaved: Number(distanceSaved.toFixed(2)),
+      timeSavedMinutes,
+    },
+  };
+};
+
 module.exports = {
   generateItinerary,
+  optimizeRoute,
 };
+

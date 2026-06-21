@@ -19,6 +19,11 @@ const activitySchema = new mongoose.Schema(
     title: String,
     description: String,
 
+    placeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Place",
+    },
+
     category: {
       type: String,
       enum: ["FOOD", "PLACE", "HOTEL", "TRANSPORT", "REST", "SHOPPING", "OTHER"],

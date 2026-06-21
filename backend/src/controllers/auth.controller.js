@@ -168,9 +168,41 @@ const googleLogin = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Upgrade user package to premium (demo mode)
+ * @route   PUT /api/auth/upgrade
+ * @access  Private
+ */
+const upgradePackage = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    user.package = 'premium';
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Nâng cấp Premium thành công!',
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role || 'user',
+        package: user.package,
+        status: user.status || 'active',
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
   googleLogin,
+  upgradePackage,
 };

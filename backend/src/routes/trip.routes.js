@@ -9,6 +9,7 @@ const {
   deleteTrip,
   shareTrip,
   getSharedTrip,
+  optimizeTripDay,
 } = require('../controllers/trip.controller');
 const { protect } = require('../middlewares/auth.middleware');
 
@@ -34,5 +35,7 @@ router.route('/:id/packing-list')
   .put(updatePackingList);
 
 router.post('/:id/share', shareTrip);
+router.post('/:id/optimize-day', optimizeTripDay);
 
 module.exports = router;
+
