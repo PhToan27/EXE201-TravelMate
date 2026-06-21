@@ -196,7 +196,11 @@ const fetchClientVietMapRoute = async ({ place, originPoint, vehicle }) => {
   }
 
   const resolvedPlace = await fetchVietMapPlaceCoordinate(place);
-  const destination = resolvedPlace || getPlaceCoordinate(place);
+  const dbDestination = getPlaceCoordinate(place);
+  const destination = resolvedPlace || dbDestination;
+  if (!destination) {
+    throw new Error('Dia diem chua co toa do hop le');
+  }
   const routeUrl = [
     'https://maps.vietmap.vn/api/route?api-version=1.1',
     `apikey=${VIETMAP_API_KEY}`,
@@ -251,6 +255,10 @@ const fetchClientVietMapRoute = async ({ place, originPoint, vehicle }) => {
 const shouldUpgradeRoute = (data) =>
   !data ||
   ['fallback', 'local-fallback'].includes(data.provider) ||
+  isDefaultDaNangCoordinate({
+    latitude: data?.place?.latitude,
+    longitude: data?.place?.longitude,
+  }) ||
   (data.routeCoordinates || []).length <= 2 ||
   (data.instructions || []).length <= 2;
 
@@ -269,13 +277,32 @@ const calculateDistanceKm = (origin, destination) => {
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const getPlaceCoordinate = (place) => ({
-  latitude: Number(place?.coordinates?.lat || place?.latitude || 16.0544),
-  longitude: Number(place?.coordinates?.lng || place?.longitude || 108.2022),
-});
+const isDefaultDaNangCoordinate = (point) =>
+  point &&
+  Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
+  Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
+
+const toCoordinatePoint = (latitude, longitude) => {
+  const point = { latitude: Number(latitude), longitude: Number(longitude) };
+  return Number.isFinite(point.latitude) && Number.isFinite(point.longitude) ? point : null;
+};
+
+const getPlaceCoordinate = (place) => {
+  const coordinates = place?.coordinates || {};
+  const candidates = [
+    toCoordinatePoint(coordinates.latitude, coordinates.longitude),
+    toCoordinatePoint(coordinates.lat, coordinates.lng),
+    toCoordinatePoint(place?.latitude, place?.longitude),
+  ].filter(Boolean);
+
+  return candidates.find((point) => !isDefaultDaNangCoordinate(point)) || null;
+};
 
 const buildLocalRoute = (place, originPoint, vehicle, reason = '') => {
   const destination = getPlaceCoordinate(place);
+  if (!destination) {
+    throw new Error(reason || 'Dia diem chua co toa do hop le');
+  }
   const distanceKm = Number(calculateDistanceKm(originPoint, destination).toFixed(1));
   const speedKmh = vehicle === 'foot' ? 5 : vehicle === 'bike' ? 15 : vehicle === 'car' ? 40 : 30;
   const durationMinutes = Math.max(1, Math.round((distanceKm / speedKmh) * 60));
@@ -314,6 +341,15 @@ const buildLocalRoute = (place, originPoint, vehicle, reason = '') => {
     },
     trafficLevel: 'low',
   };
+};
+
+const tryBuildLocalRoute = ({ place, originPoint, vehicle, reason, onSuccess }) => {
+  try {
+    onSuccess(buildLocalRoute(place, originPoint, vehicle, reason));
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const withTimeout = (promise, timeoutMs, message) =>
@@ -397,6 +433,10 @@ const NavigationDetailScreen = ({ route, navigation }) => {
           };
         } else if (initialPlace) {
           const destinationPoint = getPlaceCoordinate(initialPlace);
+          if (!destinationPoint) {
+            setErrorMessage('Dia diem chua co toa do hop le de dan duong.');
+            return;
+          }
           currentOrigin = {
             latitude: destinationPoint.latitude + 0.03,
             longitude: destinationPoint.longitude - 0.03,
@@ -409,7 +449,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         fallbackOrigin = currentOrigin;
         setOrigin(currentOrigin);
 
-        if (!placeId && initialPlace) {
+        if (initialPlace) {
           try {
             const clientRoute = await fetchClientVietMapRoute({
               place: initialPlace,
@@ -417,10 +457,23 @@ const NavigationDetailScreen = ({ route, navigation }) => {
               vehicle,
             });
             setRouteData(clientRoute);
+            return;
           } catch (clientError) {
-            setRouteData(buildLocalRoute(initialPlace, currentOrigin, vehicle, clientError.message));
+            if (!placeId) {
+              const hasLocalRoute = tryBuildLocalRoute({
+                place: initialPlace,
+                originPoint: currentOrigin,
+                vehicle,
+                reason: clientError.message,
+                onSuccess: setRouteData,
+              });
+
+              if (!hasLocalRoute) {
+                setErrorMessage(clientError.message || 'Khong the lay du lieu dan duong.');
+              }
+              return;
+            }
           }
-          return;
         }
 
         const response = await getNavigationToPlace(placeId, {
@@ -440,7 +493,17 @@ const NavigationDetailScreen = ({ route, navigation }) => {
               });
               setRouteData(clientRoute);
             } catch {
-              setRouteData(buildLocalRoute(initialPlace, currentOrigin, vehicle, response.message));
+              const hasLocalRoute = tryBuildLocalRoute({
+                place: initialPlace,
+                originPoint: currentOrigin,
+                vehicle,
+                reason: response.message,
+                onSuccess: setRouteData,
+              });
+
+              if (!hasLocalRoute) {
+                setErrorMessage(response.message || 'Khong the lay du lieu dan duong.');
+              }
             }
             return;
           }
@@ -479,6 +542,10 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         if (initialPlace) {
           if (!fallbackOrigin) {
             const destinationPoint = getPlaceCoordinate(initialPlace);
+            if (!destinationPoint) {
+              setErrorMessage(message);
+              return;
+            }
             fallbackOrigin = {
               latitude: destinationPoint.latitude + 0.03,
               longitude: destinationPoint.longitude - 0.03,
@@ -494,7 +561,17 @@ const NavigationDetailScreen = ({ route, navigation }) => {
             });
             setRouteData(clientRoute);
           } catch {
-            setRouteData(buildLocalRoute(initialPlace, fallbackOrigin, vehicle, message));
+            const hasLocalRoute = tryBuildLocalRoute({
+              place: initialPlace,
+              originPoint: fallbackOrigin,
+              vehicle,
+              reason: message,
+              onSuccess: setRouteData,
+            });
+
+            if (!hasLocalRoute) {
+              setErrorMessage(message);
+            }
           }
           return;
         }
@@ -547,7 +624,7 @@ const NavigationDetailScreen = ({ route, navigation }) => {
   }, [routeCoordinates]);
 
   const handleRetry = () => {
-    navigation.replace('NavigationDetail', { placeId, placeName, vehicle });
+    navigation.replace('NavigationDetail', { placeId, placeName, place: initialPlace, vehicle });
   };
 
   if (loading) {
@@ -565,6 +642,24 @@ const NavigationDetailScreen = ({ route, navigation }) => {
         <Ionicons name="alert-circle-outline" size={56} color={COLORS.error} />
         <Text style={styles.errorTitle}>{placeName || 'Dẫn đường'}</Text>
         <Text style={styles.errorText}>{errorMessage}</Text>
+        <View style={styles.errorActions}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.secondaryButtonText}>Quay lại</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleRetry}>
+            <Text style={styles.primaryButtonText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (!routeData?.place) {
+    return (
+      <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
+        <Ionicons name="map-outline" size={56} color={COLORS.gray[400]} />
+        <Text style={styles.errorTitle}>{placeName || 'Dẫn đường'}</Text>
+        <Text style={styles.errorText}>Chưa có dữ liệu dẫn đường cho địa điểm này.</Text>
         <View style={styles.errorActions}>
           <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
             <Text style={styles.secondaryButtonText}>Quay lại</Text>

@@ -1,11 +1,119 @@
-const buildPlacePayload = (place) => ({
-  id: place._id,
-  name: place.name,
-  address: place.address,
-  latitude: Number(place.coordinates?.lat || 16.0544),
-  longitude: Number(place.coordinates?.lng || 108.2022),
-  openHours: place.openHours,
-});
+const isDefaultDaNangCoordinate = (point) =>
+  point &&
+  Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
+  Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
+
+const toCoordinatePoint = (latitude, longitude) => {
+  const point = { latitude: Number(latitude), longitude: Number(longitude) };
+  return Number.isFinite(point.latitude) && Number.isFinite(point.longitude) ? point : null;
+};
+
+const getUsablePlaceCoordinate = (place) => {
+  const placeObject = typeof place?.toObject === 'function' ? place.toObject() : place;
+  const coordinates = placeObject?.coordinates || {};
+  const candidates = [
+    toCoordinatePoint(coordinates.latitude, coordinates.longitude),
+    toCoordinatePoint(coordinates.lat, coordinates.lng),
+    toCoordinatePoint(placeObject?.latitude, placeObject?.longitude),
+  ].filter(Boolean);
+
+  return candidates.find((point) => !isDefaultDaNangCoordinate(point)) || null;
+};
+
+const hasValidCoordinate = (point) =>
+  Number.isFinite(Number(point?.latitude)) && Number.isFinite(Number(point?.longitude));
+
+const normalizeSearchText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Ä‘/g, 'd')
+    .trim();
+
+const buildPlacePayload = (place) => {
+  const coordinate = getUsablePlaceCoordinate(place);
+
+  return {
+    id: place._id,
+    name: place.name,
+    address: place.address,
+    latitude: coordinate?.latitude,
+    longitude: coordinate?.longitude,
+    openHours: place.openHours,
+  };
+};
+
+const getPreferredSearchQuery = (place, placeName) => {
+  const rawName = placeName || place?.name || '';
+  const rawAddress = place?.address || '';
+  const normalized = normalizeSearchText(`${rawName} ${rawAddress}`);
+
+  if (normalized.includes('banh trang') && normalized.includes('tran')) {
+    return 'Nha Hang Tran 4 Le Duan Da Nang';
+  }
+
+  if (normalized.includes('mi quang') && normalized.includes('ba mua')) {
+    return 'Mi Quang Ba Mua Nguyen Tri Phuong Da Nang';
+  }
+
+  return `${rawName} ${rawAddress || 'Da Nang'}`.trim();
+};
+
+const fetchVietMapPlaceCoordinate = async (place, placeName) => {
+  const apiKey = process.env.VIETMAP_API_KEY;
+  const query = getPreferredSearchQuery(place, placeName);
+  if (!apiKey || !query) return null;
+
+  try {
+    const searchUrl = new URL('https://maps.vietmap.vn/api/search/v3');
+    searchUrl.searchParams.append('apikey', apiKey);
+    searchUrl.searchParams.append('text', query);
+
+    const searchResponse = await fetch(searchUrl);
+    const searchPayload = await searchResponse.json();
+    const bestMatch = searchPayload?.value?.[0];
+    if (!searchResponse.ok || !bestMatch?.ref_id) return null;
+
+    const detailUrl = new URL('https://maps.vietmap.vn/api/place/v3');
+    detailUrl.searchParams.append('apikey', apiKey);
+    detailUrl.searchParams.append('refid', bestMatch.ref_id);
+
+    const detailResponse = await fetch(detailUrl);
+    const detailPayload = await detailResponse.json();
+    const latitude = Number(detailPayload?.lat);
+    const longitude = Number(detailPayload?.lng);
+    if (!detailResponse.ok || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+
+    return {
+      latitude,
+      longitude,
+      address: detailPayload.display || detailPayload.address || place?.address || '',
+      name: detailPayload.name || placeName || place?.name,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const resolvePlacePayload = async (place, placeName) => {
+  const placePayload = buildPlacePayload(place);
+  if (hasValidCoordinate(placePayload)) return placePayload;
+
+  const resolvedCoordinate = await fetchVietMapPlaceCoordinate(place, placeName);
+  if (!resolvedCoordinate) return placePayload;
+
+  return {
+    ...placePayload,
+    name: resolvedCoordinate.name || placePayload.name,
+    address: resolvedCoordinate.address || placePayload.address,
+    latitude: resolvedCoordinate.latitude,
+    longitude: resolvedCoordinate.longitude,
+  };
+};
 
 const normalizeCoordinatePair = (pair) => {
   if (!Array.isArray(pair) || pair.length < 2) return null;
@@ -88,8 +196,12 @@ const getVehicleSpeedKmh = (vehicle) => {
   return 30;
 };
 
-const buildFallbackRoute = ({ place, origin, vehicle, reason }) => {
-  const placePayload = buildPlacePayload(place);
+const buildFallbackRoute = ({ place, origin, vehicle, reason, destinationPayload }) => {
+  const placePayload = destinationPayload || buildPlacePayload(place);
+  if (!hasValidCoordinate(placePayload)) {
+    throw new Error('Dia diem chua co toa do hop le de dan duong');
+  }
+
   const distanceKm = Number(calculateAirDistanceKm(origin, placePayload).toFixed(1));
   const durationMinutes = Math.max(
     1,
@@ -173,9 +285,12 @@ const fetchVietMapRoute = async ({ origin, destination, vehicle }) => {
   }
 };
 
-const getNavigationToPlace = async ({ place, origin, vehicle }) => {
+const getNavigationToPlace = async ({ place, origin, vehicle, placeName }) => {
   const normalizedVehicle = normalizeVehicle(vehicle);
-  const destination = buildPlacePayload(place);
+  const destination = await resolvePlacePayload(place, placeName);
+  if (!hasValidCoordinate(destination)) {
+    throw new Error('Dia diem chua co toa do hop le de dan duong');
+  }
 
   try {
     const path = await fetchVietMapRoute({
@@ -213,6 +328,7 @@ const getNavigationToPlace = async ({ place, origin, vehicle }) => {
       origin,
       vehicle: normalizedVehicle,
       reason: error.message,
+      destinationPayload: destination,
     });
   }
 };

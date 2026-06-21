@@ -18,11 +18,47 @@ import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 import { getPlaceDetails, getNearbyPlaces } from '../../services/place/placeApi';
 import useTrip from '../../hooks/useTrip';
 
+const isDefaultDaNangCoordinate = (point) =>
+  point &&
+  Math.abs(Number(point.latitude) - 16.0544) < 0.0002 &&
+  Math.abs(Number(point.longitude) - 108.2022) < 0.0002;
+
+const getUsableCoordinates = (place) => {
+  const latitude = Number(place?.coordinates?.lat ?? place?.latitude);
+  const longitude = Number(place?.coordinates?.lng ?? place?.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+  const point = { latitude, longitude };
+  return isDefaultDaNangCoordinate(point) ? null : point;
+};
+
+const toPlaceCoordinates = (point) => ({
+  lat: point.latitude,
+  lng: point.longitude,
+});
+
+const mergePlaceDetails = (initialPlace, fetchedPlace) => {
+  const initialCoordinates = getUsableCoordinates(initialPlace);
+  const fetchedCoordinates = getUsableCoordinates(fetchedPlace);
+  const coordinates = initialCoordinates || fetchedCoordinates;
+
+  return {
+    ...(initialPlace || {}),
+    ...(fetchedPlace || {}),
+    _id: initialPlace?._id || fetchedPlace?._id || fetchedPlace?.id,
+    placeId: initialPlace?.placeId || initialPlace?._id || fetchedPlace?.placeId,
+    coordinates: coordinates
+      ? toPlaceCoordinates(coordinates)
+      : fetchedPlace?.coordinates || initialPlace?.coordinates,
+  };
+};
+
 const PlaceDetailScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
-  const { placeName, tripId } = route.params || {};
+  const { placeName, tripId, place: initialPlace } = route.params || {};
   const [loading, setLoading] = useState(true);
-  const [place, setPlace] = useState(null);
+  const [place, setPlace] = useState(initialPlace || null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
 
@@ -50,10 +86,10 @@ const PlaceDetailScreen = ({ route, navigation }) => {
   useEffect(() => {
     const fetchDetails = async () => {
       try {
-        setLoading(true);
+        if (!initialPlace) setLoading(true);
         const res = await getPlaceDetails(placeName);
         if (res.success) {
-          setPlace(res.data);
+          setPlace(mergePlaceDetails(initialPlace, res.data));
           const { lat, lng } = res.data.coordinates || {};
           if (lat && lng) {
             fetchNearby(lat, lng, res.data.name);
@@ -70,7 +106,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
     };
 
     fetchDetails();
-  }, [placeName]);
+  }, [initialPlace, placeName]);
 
   useEffect(() => {
     if (tripId) {
@@ -265,15 +301,20 @@ const PlaceDetailScreen = ({ route, navigation }) => {
 
   const handleOpenMap = () => {
     if (!place) return;
-    if (!place._id) {
-      Alert.alert('Loi', 'Khong the lay ma dia diem de xem duong di.');
+    const resolvedPlaceId = place._id || place.placeId;
+    const navigationPoint = getUsableCoordinates(place);
+
+    if (!navigationPoint && !resolvedPlaceId) {
+      Alert.alert('Loi', 'Khong the lay toa do dia diem de xem duong di.');
       return;
     }
 
     navigation.navigate('NavigationDetail', {
-      placeId: place._id,
+      placeId: navigationPoint ? undefined : resolvedPlaceId,
       placeName: place.name || placeName,
-      place,
+      place: navigationPoint
+        ? { ...place, coordinates: toPlaceCoordinates(navigationPoint) }
+        : place,
       vehicle: 'motorcycle',
     });
     return;
@@ -339,13 +380,13 @@ const PlaceDetailScreen = ({ route, navigation }) => {
           {/* Title and Category info overlay */}
           <View style={styles.titleOverlay}>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{place.category.toUpperCase()}</Text>
+            <Text style={styles.badgeText}>{(place.category || 'Địa điểm').toUpperCase()}</Text>
             </View>
             <Text style={styles.placeName}>{place.name}</Text>
             <View style={styles.locationRow}>
               <Ionicons name="location-sharp" size={14} color="rgba(255, 255, 255, 0.8)" />
               <Text style={styles.locationSubtitle} numberOfLines={1}>
-                {place.address.split(',').slice(-3).join(',').trim()}
+                {(place.address || '').split(',').slice(-3).join(',').trim()}
               </Text>
             </View>
           </View>
@@ -375,7 +416,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
         {/* Details Content */}
         <View style={styles.contentBody}>
           <Text style={styles.sectionTitle}>Giới thiệu</Text>
-          <Text style={styles.introText}>{place.introduction}</Text>
+          <Text style={styles.introText}>{place.introduction || 'Chưa có mô tả cho địa điểm này.'}</Text>
 
           {/* Contact and timing blocks */}
           <View style={styles.detailBlock}>
@@ -385,7 +426,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
               </View>
               <View style={styles.detailInfo}>
                 <Text style={styles.detailTitle}>ĐỊA CHỈ</Text>
-                <Text style={styles.detailVal}>{place.address}</Text>
+                <Text style={styles.detailVal}>{place.address || 'Chưa có địa chỉ'}</Text>
               </View>
             </View>
 
@@ -395,7 +436,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
               </View>
               <View style={styles.detailInfo}>
                 <Text style={styles.detailTitle}>GIỜ MỞ CỬA</Text>
-                <Text style={styles.detailVal}>{place.openHours}</Text>
+                <Text style={styles.detailVal}>{place.openHours || 'Chưa có dữ liệu'}</Text>
               </View>
             </View>
 
@@ -405,7 +446,7 @@ const PlaceDetailScreen = ({ route, navigation }) => {
               </View>
               <View style={styles.detailInfo}>
                 <Text style={styles.detailTitle}>GIÁ VÉ</Text>
-                <Text style={styles.detailVal}>{place.ticketPrice}</Text>
+                <Text style={styles.detailVal}>{place.ticketPrice || 'Chưa có dữ liệu'}</Text>
               </View>
             </View>
           </View>

@@ -34,6 +34,15 @@ const formatDisplay = (date) => {
   return `${d}/${m}/${y}`;
 };
 
+const onlyDigits = (value) => String(value || '').replace(/[^\d]/g, '');
+
+const formatVndInput = (value) => {
+  const digits = onlyDigits(value);
+  if (!digits) return '';
+
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 // ----- Date Picker Row -----
 const DatePickerRow = ({ label, date, onPress, error }) => (
   <View style={dpStyles.container}>
@@ -103,12 +112,11 @@ const CreateTripScreen = ({ navigation }) => {
 
   const toggleTravelStyle = (value) => {
     if (travelStyles.includes(value)) {
-      if (travelStyles.length > 1) {
-        setTravelStyles(travelStyles.filter(style => style !== value));
-      }
+      setTravelStyles(travelStyles.filter(style => style !== value));
     } else {
       setTravelStyles([...travelStyles, value]);
     }
+    setErrors((e) => ({ ...e, travelStyles: '' }));
   };
 
   // Picker modal state
@@ -145,6 +153,7 @@ const CreateTripScreen = ({ navigation }) => {
     const e = {};
     if (!destination.trim()) e.destination = 'Vui lòng nhập điểm đến';
     if (endDateObj <= startDateObj) e.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+    if (!travelStyles.length) e.travelStyles = 'Vui lòng chọn ít nhất một sở thích';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -160,7 +169,7 @@ const CreateTripScreen = ({ navigation }) => {
         destination: destination.trim(),
         startDate: toDateString(startDateObj),
         endDate: toDateString(endDateObj),
-        budget: budget ? parseInt(budget.replace(/[^\d]/g, ''), 10) : 0,
+        budget: budget ? parseInt(onlyDigits(budget), 10) : 0,
         people: parseInt(people, 10) || 1,
         travelStyle: travelStyles.join(', '),
         tripType: tripType,
@@ -262,10 +271,11 @@ const CreateTripScreen = ({ navigation }) => {
               <CustomInput
                 label="NGÂN SÁCH (VND)"
                 value={budget}
-                onChangeText={setBudget}
-                placeholder="VND"
-                keyboardType="numeric"
+                onChangeText={(value) => setBudget(formatVndInput(value))}
+                placeholder="5.000.000"
+                keyboardType="number-pad"
                 leftIcon={<Ionicons name="wallet-outline" size={18} color={COLORS.gray[400]} />}
+                rightText="đ"
               />
             </View>
           </View>
@@ -328,6 +338,9 @@ const CreateTripScreen = ({ navigation }) => {
                 );
               })}
             </View>
+            {errors.travelStyles ? (
+              <Text style={styles.styleError}>{errors.travelStyles}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -444,6 +457,11 @@ const styles = StyleSheet.create({
   },
   styleChipLabelActive: {
     color: COLORS.primary,
+  },
+  styleError: {
+    marginTop: 8,
+    fontSize: 11,
+    color: COLORS.error,
   },
   createBtn: {
     marginTop: SPACING.sm,
