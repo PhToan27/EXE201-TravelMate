@@ -12,6 +12,12 @@ import './styles.css';
 
 const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'https://exe201-travelmate-1.onrender.com/api';
+const LEGACY_API_BASE_URL = 'https://exe201-travelmate.onrender.com/api';
+
+const getInitialApiBaseUrl = () => {
+  const storedUrl = localStorage.getItem('travelmate.web.apiBaseUrl');
+  return storedUrl === LEGACY_API_BASE_URL ? DEFAULT_API_BASE_URL : (storedUrl || DEFAULT_API_BASE_URL);
+};
 
 const today = new Date().toISOString().slice(0, 10);
 const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -91,7 +97,7 @@ const WeatherIcon = ({ type, size = 22 }) => {
    APP
    ═══════════════════════════════════════════════════════════ */
 function App() {
-  const [apiBaseUrl, setApiBaseUrl] = useState(localStorage.getItem('travelmate.web.apiBaseUrl') || DEFAULT_API_BASE_URL);
+  const [apiBaseUrl, setApiBaseUrl] = useState(getInitialApiBaseUrl);
   const [token, setToken] = useState(localStorage.getItem('travelmate.web.token') || '');
   const [user, setUser] = useState(readStoredJson('travelmate.web.user'));
   const [activeTab, setActiveTab] = useState('home');
