@@ -226,6 +226,30 @@ function App() {
     return () => window.removeEventListener('popstate', syncFromBrowserRoute);
   }, []);
   useEffect(() => {
+    const keepExternalLinksOutOfCurrentTab = (event) => {
+      const anchor = event.target?.closest?.('a[href]');
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+      let url;
+      try {
+        url = new URL(href, window.location.href);
+      } catch {
+        return;
+      }
+      const isExternal = url.origin !== window.location.origin;
+      if (!isExternal) return;
+
+      event.preventDefault();
+      window.open(url.href, '_blank', 'noopener,noreferrer');
+    };
+
+    document.addEventListener('click', keepExternalLinksOutOfCurrentTab, true);
+    return () => document.removeEventListener('click', keepExternalLinksOutOfCurrentTab, true);
+  }, []);
+  useEffect(() => {
     if (token && activeTab === 'tripDetail' && routeTripId && selectedTrip?._id !== routeTripId) {
       loadTripDetail(routeTripId, { replace: true });
     }
@@ -2046,6 +2070,7 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
   const [lastOrderCode, setLastOrderCode] = useState(() => localStorage.getItem(paymentOrderStorageKey) || '');
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [payosCheckoutUrl, setPayosCheckoutUrl] = useState('');
 
   const startPayosPremium = async () => {
     // Open immediately from the click event so browsers do not block the PayOS tab as a popup.
@@ -2055,10 +2080,11 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
       const orderCode = String(r.data.orderCode);
       setLastOrderCode(orderCode);
       localStorage.setItem(paymentOrderStorageKey, orderCode);
+      setPayosCheckoutUrl(r.data.checkoutUrl);
       if (checkoutWindow) {
         checkoutWindow.location.assign(r.data.checkoutUrl);
       } else {
-        window.location.assign(r.data.checkoutUrl);
+        alert('Trình duyệt đã chặn tab PayOS. Bấm "Mở lại PayOS" để thanh toán.');
       }
     } else if (checkoutWindow) {
       checkoutWindow.close();
@@ -2084,6 +2110,7 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
         localStorage.setItem('travelmate.web.user', JSON.stringify(u));
         localStorage.removeItem(paymentOrderStorageKey);
         setLastOrderCode('');
+        setPayosCheckoutUrl('');
       }
       return r?.data?.status;
     } finally {
@@ -2146,6 +2173,11 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
             <button onClick={() => checkPremiumPayment()} disabled={!lastOrderCode || checkingPayment} style={{ width: '100%' }}>
               {checkingPayment ? 'Đang kiểm tra...' : 'Kiểm tra thanh toán PayOS'}
             </button>
+            {payosCheckoutUrl ? (
+              <a className="primary icon-text" href={payosCheckoutUrl} target="_blank" rel="noreferrer" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
+                <UiIcon icon={Link2} />Mở lại PayOS
+              </a>
+            ) : null}
             {lastOrderCode ? <p className="muted">PayOS orderCode: {lastOrderCode}</p> : null}
             <button className="danger icon-text" onClick={clearSession} style={{ width: '100%' }}><UiIcon icon={LogOut} />Đăng xuất</button>
           </div>
