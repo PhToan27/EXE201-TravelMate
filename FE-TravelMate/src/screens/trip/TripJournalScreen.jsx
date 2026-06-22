@@ -23,7 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import useAuthStore from '../../store/auth/authStore';
 import useTrip from '../../hooks/useTrip';
-import { upgradeToPremium } from '../../services/auth/authApi';
+import { createPremiumPayment, getPremiumPaymentStatus } from '../../services/auth/authApi';
 import * as journalApi from '../../services/journal/journalApi';
 import { COLORS, SPACING, RADIUS, FONTS } from '../../utils/constants';
 import { formatDateRange, getDayCount } from '../../utils/dateUtils';
@@ -54,6 +54,7 @@ const TripJournalScreen = ({ route, navigation }) => {
 
   const [journals, setJournals] = useState([]);
   const [loadingJournals, setLoadingJournals] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [activeTab, setActiveTab] = useState('timeline'); // 'timeline' or 'gallery'
 
@@ -78,17 +79,25 @@ const TripJournalScreen = ({ route, navigation }) => {
   const isPremium = user && user.package === 'premium';
 
   useEffect(() => {
+    let active = true;
+    refreshProfile().finally(() => {
+      if (active) setProfileReady(true);
+    });
+    return () => { active = false; };
+  }, [refreshProfile]);
+
+  useEffect(() => {
     fetchTripById(tripId);
   }, [tripId]);
 
   useEffect(() => {
-    if (isPremium && trip) {
+    if (profileReady && isPremium && trip) {
       loadJournals();
       if (trip.startDate) {
         setFormSelectedDate(new Date(trip.startDate).toISOString());
       }
     }
-  }, [isPremium, trip?._id]);
+  }, [profileReady, isPremium, trip?._id]);
 
   const loadJournals = async () => {
     try {
@@ -99,6 +108,7 @@ const TripJournalScreen = ({ route, navigation }) => {
       }
     } catch (err) {
       console.error('Error loading journals:', err);
+      if (err.response?.status === 403) await refreshProfile();
     } finally {
       setLoadingJournals(false);
     }
@@ -107,12 +117,19 @@ const TripJournalScreen = ({ route, navigation }) => {
   const handleUpgrade = async () => {
     try {
       setUpgrading(true);
-      const res = await upgradeToPremium();
-      if (res.success) {
-        await refreshProfile();
-        Alert.alert('Thành công 🎉', 'Chúc mừng! Tài khoản của bạn đã được nâng cấp lên gói Premium. Chào mừng bạn đến với Premium Travel Journal!');
+      const paymentRes = await createPremiumPayment();
+      const payment = paymentRes.data;
+      if (paymentRes.success && payment?.checkoutUrl) {
+        await WebBrowser.openBrowserAsync(payment.checkoutUrl);
+        const statusRes = await getPremiumPaymentStatus(payment.orderCode);
+        if (statusRes?.data?.status === 'PAID') {
+          await refreshProfile();
+          Alert.alert('Thanh cong', 'Thanh toan PayOS da thanh cong. Tai khoan cua ban da duoc nang cap Premium.');
+        } else {
+          Alert.alert('Chua thanh toan', 'PayOS chua ghi nhan thanh toan cho don nay. Ban co the thu lai sau it phut.');
+        }
       } else {
-        Alert.alert('Lỗi', res.message || 'Không thể nâng cấp tài khoản lúc này.');
+        Alert.alert('Loi', paymentRes.message || 'Khong the tao thanh toan PayOS luc nay.');
       }
     } catch (err) {
       Alert.alert('Lỗi', err.message || 'Có lỗi xảy ra khi nâng cấp tài khoản.');
@@ -379,7 +396,7 @@ const TripJournalScreen = ({ route, navigation }) => {
               {upgrading ? (
                 <ActivityIndicator color={COLORS.white} />
               ) : (
-                <Text style={styles.upgradeButtonText}>Nâng cấp Premium</Text>
+                <Text style={styles.upgradeButtonText}>Nâng cấp Premium - 10.000 đ</Text>
               )}
             </TouchableOpacity>
 

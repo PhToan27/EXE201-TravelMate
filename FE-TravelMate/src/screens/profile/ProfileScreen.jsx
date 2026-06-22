@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,20 +10,53 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
 import useAuth from '../../hooks/useAuth';
 import useTrip from '../../hooks/useTrip';
+import { createPremiumPayment, getPremiumPaymentStatus } from '../../services/auth/authApi';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 
 const ProfileScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshProfile } = useAuth();
   const { trips } = useTrip(true);
+  const [upgrading, setUpgrading] = useState(false);
+
+  useEffect(() => {
+    refreshProfile();
+  }, [refreshProfile]);
 
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
       { text: 'Hủy', style: 'cancel' },
       { text: 'Đăng xuất', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleUpgrade = async () => {
+    try {
+      setUpgrading(true);
+      const paymentRes = await createPremiumPayment();
+      const payment = paymentRes?.data;
+      if (!paymentRes?.success || !payment?.checkoutUrl) {
+        Alert.alert('Không thể tạo thanh toán', paymentRes?.message || 'PayOS chưa trả về liên kết thanh toán.');
+        return;
+      }
+
+      await WebBrowser.openBrowserAsync(payment.checkoutUrl);
+      const statusRes = await getPremiumPaymentStatus(payment.orderCode);
+      if (statusRes?.data?.status === 'PAID') {
+        await refreshProfile();
+        Alert.alert('Thanh toán thành công', 'Tài khoản của bạn đã được nâng cấp Premium.');
+      } else {
+        Alert.alert('Chưa thanh toán', 'PayOS chưa ghi nhận đơn này. Bạn có thể kiểm tra lại sau ít phút.');
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Không thể kết nối PayOS lúc này.';
+      Alert.alert('Không thể mở PayOS', message);
+    } finally {
+      setUpgrading(false);
+    }
   };
 
   const tripCount = trips.length;
@@ -64,6 +97,23 @@ const ProfileScreen = ({ navigation }) => {
         <StatCard label="Điểm đến" value={String(new Set(trips.map((t) => t.destination)).size)} icon="location-outline" />
         <StatCard label="Ngày đi" value={String(trips.reduce((s, t) => s + (t.totalDays || 0), 0))} icon="calendar-outline" />
       </View>
+
+      {user?.package !== 'premium' && (
+        <View style={styles.premiumCard}>
+          <View style={styles.premiumCopy}>
+            <View style={styles.premiumIcon}>
+              <Ionicons name="diamond-outline" size={22} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.premiumTitle}>TravelMate Premium</Text>
+              <Text style={styles.premiumSubtitle}>Mở nhật ký chuyến đi và trải nghiệm gợi ý nâng cao.</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={[styles.premiumButton, upgrading && styles.premiumButtonDisabled]} onPress={handleUpgrade} disabled={upgrading} activeOpacity={0.85}>
+            {upgrading ? <Text style={styles.premiumButtonText}>Đang mở PayOS...</Text> : <><Ionicons name="card-outline" size={18} color={COLORS.white} /><Text style={styles.premiumButtonText}>Mua Premium - 10.000 đ</Text></>}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Menu */}
       <View style={styles.menuCard}>
@@ -154,6 +204,38 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginTop: -SPACING.lg,
   },
+  premiumCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    gap: SPACING.md,
+  },
+  premiumCopy: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  premiumIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumTitle: { fontSize: 16, fontWeight: '800', color: COLORS.black, marginBottom: 2 },
+  premiumSubtitle: { fontSize: 12, lineHeight: 18, color: COLORS.gray[500] },
+  premiumButton: {
+    minHeight: 46,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  premiumButtonDisabled: { opacity: 0.65 },
+  premiumButtonText: { fontSize: 14, fontWeight: '800', color: COLORS.white },
   menuCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,

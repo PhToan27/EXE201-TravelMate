@@ -321,6 +321,7 @@ const createTrip = async (req, res) => {
       averagePricePerPerson: rest.averagePricePerPerson,
       rating: rest.rating,
       description: rest.note,
+      location: rest.location,
     }));
 
     const formattedBudgetBreakdown = budgetDoc ? {
@@ -425,6 +426,7 @@ const getTripById = async (req, res) => {
       averagePricePerPerson: rest.averagePricePerPerson,
       rating: rest.rating,
       description: rest.note,
+      location: rest.location,
     }));
 
     const budgetDoc = await BudgetBreakdown.findOne({ tripId: trip._id });
@@ -718,6 +720,7 @@ const updateTrip = async (req, res) => {
       averagePricePerPerson: rest.averagePricePerPerson,
       rating: rest.rating,
       description: rest.note,
+      location: rest.location,
     }));
 
     const formattedBudgetBreakdown = finalBudgetBreakdown ? {

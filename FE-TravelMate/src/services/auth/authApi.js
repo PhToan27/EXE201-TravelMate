@@ -44,3 +44,21 @@ export const upgradeToPremium = async () => {
   const response = await api.put('/auth/upgrade');
   return response.data;
 };
+
+/**
+ * Create PayOS checkout link for Premium package
+ * POST /api/payments/payos/premium
+ */
+export const createPremiumPayment = async () => {
+  const response = await api.post('/payments/payos/premium');
+  return response.data;
+};
+
+/**
+ * Sync PayOS order status after payment
+ * GET /api/payments/payos/:orderCode
+ */
+export const getPremiumPaymentStatus = async (orderCode) => {
+  const response = await api.get(`/payments/payos/${orderCode}`);
+  return response.data;
+};
