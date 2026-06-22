@@ -718,6 +718,109 @@ select {
   box-shadow: 0 15px 35px rgba(249, 115, 22, 0.2);
 }
 
+.premium-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.premium-modal {
+  position: relative;
+  width: min(100%, 440px);
+  padding: 32px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+}
+
+.premium-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.premium-modal-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #c2410c;
+  background: #ffedd5;
+}
+
+.premium-modal-kicker {
+  margin: 0 0 8px;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.premium-modal h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.premium-modal-summary {
+  margin: 10px 0 20px;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.premium-benefit-list {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.premium-benefit-list div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.premium-benefit-list .ui-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #16a34a;
+}
+
+.premium-modal-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.premium-modal-price strong { color: #ea580c; font-size: 28px; }
+.premium-modal-price span { color: #64748b; font-size: 14px; }
+
+.premium-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.45fr;
+  gap: 10px;
+}
+
+.premium-modal-actions button { min-height: 46px; justify-content: center; }
+
 /* ── Page Content ───────────────────────────────────────── */
 .page-body {
   padding: 32px;

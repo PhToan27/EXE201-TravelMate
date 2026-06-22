@@ -1852,6 +1852,7 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
   const paymentOrderStorageKey = 'travelmate.web.payosOrderCode';
   const [lastOrderCode, setLastOrderCode] = useState(() => localStorage.getItem(paymentOrderStorageKey) || '');
   const [checkingPayment, setCheckingPayment] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   const startPayosPremium = async () => {
     // Open immediately from the click event so browsers do not block the PayOS tab as a popup.
@@ -1947,7 +1948,7 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
             {user?.package === 'premium' ? (
               <div className="notice success">Tài khoản của bạn đang dùng Premium.</div>
             ) : (
-              <button className="primary" onClick={startPayosPremium} style={{ width: '100%' }}>⭐ Mua Premium - 10.000 đ</button>
+              <button className="primary icon-text" onClick={() => setShowPremiumModal(true)} style={{ width: '100%' }}><UiIcon icon={ShieldCheck} />Mua Premium - 10.000 đ</button>
             )}
             <button onClick={() => checkPremiumPayment()} disabled={!lastOrderCode || checkingPayment} style={{ width: '100%' }}>
               {checkingPayment ? 'Đang kiểm tra...' : 'Kiểm tra thanh toán PayOS'}
@@ -1957,6 +1958,27 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
           </div>
         </div>
       </div>
+      {showPremiumModal && (
+        <div className="premium-modal-backdrop" role="presentation" onMouseDown={() => setShowPremiumModal(false)}>
+          <section className="premium-modal" role="dialog" aria-modal="true" aria-labelledby="premium-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="premium-modal-close" onClick={() => setShowPremiumModal(false)} title="Đóng" aria-label="Đóng"><UiIcon icon={X} /></button>
+            <div className="premium-modal-icon"><UiIcon icon={ShieldCheck} size={28} strokeWidth={2.2} /></div>
+            <p className="premium-modal-kicker">TRAVELMATE PREMIUM</p>
+            <h2 id="premium-modal-title">Du lịch chủ động hơn</h2>
+            <p className="premium-modal-summary">Gói Premium có hiệu lực 30 ngày kể từ khi PayOS xác nhận thanh toán.</p>
+            <div className="premium-benefit-list">
+              <div><UiIcon icon={Check} size={18} /><span>Tạo và lưu nhật ký chuyến đi kèm ảnh</span></div>
+              <div><UiIcon icon={Check} size={18} /><span>Nhận gợi ý lịch trình được tối ưu hơn</span></div>
+              <div><UiIcon icon={Check} size={18} /><span>Truy cập quyền lợi Premium trong 30 ngày</span></div>
+            </div>
+            <div className="premium-modal-price"><strong>10.000 đ</strong><span>/ 30 ngày</span></div>
+            <div className="premium-modal-actions">
+              <button onClick={() => setShowPremiumModal(false)}>Để sau</button>
+              <button className="primary icon-text" onClick={() => { setShowPremiumModal(false); startPayosPremium(); }}><UiIcon icon={WalletCards} />Tiếp tục thanh toán</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

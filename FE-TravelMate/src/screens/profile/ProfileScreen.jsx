@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,7 @@ const ProfileScreen = ({ navigation }) => {
   const { user, logout, refreshProfile } = useAuth();
   const { trips } = useTrip(true);
   const [upgrading, setUpgrading] = useState(false);
+  const [premiumModalVisible, setPremiumModalVisible] = useState(false);
 
   useEffect(() => {
     refreshProfile();
@@ -116,7 +118,7 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.premiumSubtitle}>Mở nhật ký chuyến đi và trải nghiệm gợi ý nâng cao.</Text>
             </View>
           </View>
-          <TouchableOpacity style={[styles.premiumButton, upgrading && styles.premiumButtonDisabled]} onPress={handleUpgrade} disabled={upgrading} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.premiumButton, upgrading && styles.premiumButtonDisabled]} onPress={() => setPremiumModalVisible(true)} disabled={upgrading} activeOpacity={0.85}>
             {upgrading ? <Text style={styles.premiumButtonText}>Đang mở PayOS...</Text> : <><Ionicons name="card-outline" size={18} color={COLORS.white} /><Text style={styles.premiumButtonText}>Mua Premium - 10.000 đ</Text></>}
           </TouchableOpacity>
         </View>
@@ -135,6 +137,44 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       )}
+
+      <Modal visible={premiumModalVisible} transparent animationType="fade" onRequestClose={() => setPremiumModalVisible(false)}>
+        <View style={styles.premiumModalOverlay}>
+          <View style={styles.premiumModal}>
+            <TouchableOpacity style={styles.premiumModalClose} onPress={() => setPremiumModalVisible(false)} accessibilityLabel="Đóng">
+              <Ionicons name="close" size={22} color={COLORS.gray[600]} />
+            </TouchableOpacity>
+            <View style={styles.premiumModalIcon}>
+              <Ionicons name="shield-checkmark-outline" size={30} color={COLORS.primary} />
+            </View>
+            <Text style={styles.premiumModalKicker}>TRAVELMATE PREMIUM</Text>
+            <Text style={styles.premiumModalTitle}>Du lịch chủ động hơn</Text>
+            <Text style={styles.premiumModalSummary}>Gói Premium có hiệu lực 30 ngày kể từ khi PayOS xác nhận thanh toán.</Text>
+            <View style={styles.premiumBenefitList}>
+              <PremiumBenefit icon="images-outline" text="Tạo và lưu nhật ký chuyến đi kèm ảnh" />
+              <PremiumBenefit icon="sparkles-outline" text="Nhận gợi ý lịch trình được tối ưu hơn" />
+              <PremiumBenefit icon="calendar-outline" text="Truy cập quyền lợi Premium trong 30 ngày" />
+            </View>
+            <View style={styles.premiumPriceRow}>
+              <Text style={styles.premiumPrice}>10.000 đ</Text>
+              <Text style={styles.premiumDuration}>/ 30 ngày</Text>
+            </View>
+            <View style={styles.premiumModalActions}>
+              <TouchableOpacity style={styles.premiumLaterButton} onPress={() => setPremiumModalVisible(false)}>
+                <Text style={styles.premiumLaterText}>Để sau</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.premiumButton, styles.premiumConfirmButton, upgrading && styles.premiumButtonDisabled]}
+                onPress={() => { setPremiumModalVisible(false); handleUpgrade(); }}
+                disabled={upgrading}
+              >
+                <Ionicons name="card-outline" size={18} color={COLORS.white} />
+                <Text style={styles.premiumButtonText}>Thanh toán</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Menu */}
       <View style={styles.menuCard}>
@@ -170,6 +210,13 @@ const StatCard = ({ label, value, icon }) => (
     <Ionicons name={icon} size={22} color={COLORS.primary} />
     <Text style={statStyles.value}>{value}</Text>
     <Text style={statStyles.label}>{label}</Text>
+  </View>
+);
+
+const PremiumBenefit = ({ icon, text }) => (
+  <View style={styles.premiumBenefitItem}>
+    <Ionicons name="checkmark-circle" size={19} color={COLORS.success} />
+    <Text style={styles.premiumBenefitText}>{text}</Text>
   </View>
 );
 
@@ -261,6 +308,50 @@ const styles = StyleSheet.create({
   },
   premiumButtonDisabled: { opacity: 0.65 },
   premiumButtonText: { fontSize: 14, fontWeight: '800', color: COLORS.white },
+  premiumModalOverlay: {
+    flex: 1,
+    padding: SPACING.lg,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+  },
+  premiumModal: {
+    position: 'relative',
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.white,
+  },
+  premiumModalClose: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumModalIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    marginBottom: SPACING.md,
+  },
+  premiumModalKicker: { fontSize: 12, fontWeight: '800', color: COLORS.primary, marginBottom: 6 },
+  premiumModalTitle: { fontSize: 24, fontWeight: '800', color: COLORS.black, marginBottom: SPACING.sm },
+  premiumModalSummary: { fontSize: 14, lineHeight: 21, color: COLORS.gray[500], marginBottom: SPACING.md },
+  premiumBenefitList: { gap: 12, padding: SPACING.md, backgroundColor: COLORS.gray[50], borderWidth: 1, borderColor: COLORS.gray[200] },
+  premiumBenefitItem: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
+  premiumBenefitText: { flex: 1, fontSize: 14, lineHeight: 20, color: COLORS.gray[700] },
+  premiumPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: SPACING.sm, marginVertical: SPACING.md },
+  premiumPrice: { fontSize: 27, fontWeight: '800', color: COLORS.primary },
+  premiumDuration: { fontSize: 14, color: COLORS.gray[500] },
+  premiumModalActions: { flexDirection: 'row', gap: SPACING.sm },
+  premiumLaterButton: { flex: 1, minHeight: 46, borderWidth: 1, borderColor: COLORS.gray[300], borderRadius: RADIUS.md, justifyContent: 'center', alignItems: 'center' },
+  premiumLaterText: { fontSize: 14, fontWeight: '700', color: COLORS.gray[600] },
+  premiumConfirmButton: { flex: 1.4 },
   menuCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
