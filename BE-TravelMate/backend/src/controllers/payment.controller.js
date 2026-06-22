@@ -204,7 +204,10 @@ const handlePayosWebhook = async (req, res) => {
     }
     await order.save();
 
-    return res.json({ success: true, message: 'Webhook processed' });
+    // PayOS treats a 2xx response as an acknowledged callback. Keep its
+    // standard code/desc fields so the endpoint is also easy to verify in
+    // the PayOS webhook tester.
+    return res.json({ code: '00', desc: 'success', success: true });
   } catch (error) {
     return res.status(error.code === 'PAYOS_CONFIG_MISSING' ? 500 : 500).json({
       success: false,

@@ -4,7 +4,7 @@
 
 
 export const API_BASE_URL =
-  (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://exe201-travelmate.onrender.com/api').trim();
+  (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://exe201-travelmate-1.onrender.com/api').trim();
 
 export const VIETMAP_API_KEY =
   (process.env.EXPO_PUBLIC_VIETMAP_API_KEY ||
