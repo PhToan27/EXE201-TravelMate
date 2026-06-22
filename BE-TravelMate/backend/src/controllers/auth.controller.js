@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { syncPremiumMembership } = require('../services/membership.service');
 
 // Helper to generate JWT
 const generateToken = (id) => {
@@ -8,6 +9,19 @@ const generateToken = (id) => {
     expiresIn: '30d',
   });
 };
+
+const serializeUser = (user, includePreferences = false) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar || '',
+  role: user.role || 'user',
+  package: user.package || 'free',
+  premiumStartedAt: user.premiumStartedAt || null,
+  premiumExpiresAt: user.premiumExpiresAt || null,
+  status: user.status || 'active',
+  ...(includePreferences ? { preferences: user.preferences || [] } : {}),
+});
 
 /**
  * @desc    Register a new user
@@ -36,15 +50,7 @@ const registerUser = async (req, res) => {
     if (user) {
       return res.status(201).json({
         success: true,
-        data: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role || 'user',
-          package: user.package || 'free',
-          status: user.status || 'active',
-          token: generateToken(user._id),
-        },
+        data: { ...serializeUser(user), token: generateToken(user._id) },
       });
     } else {
       return res.status(400).json({ success: false, message: 'Invalid user data' });
@@ -66,17 +72,10 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
+      await syncPremiumMembership(user);
       return res.json({
         success: true,
-        data: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role || 'user',
-          package: user.package || 'free',
-          status: user.status || 'active',
-          token: generateToken(user._id),
-        },
+        data: { ...serializeUser(user), token: generateToken(user._id) },
       });
     } else {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -96,17 +95,10 @@ const getUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
+      await syncPremiumMembership(user);
       return res.json({
         success: true,
-        data: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role || 'user',
-          package: user.package || 'free',
-          status: user.status || 'active',
-          preferences: user.preferences,
-        },
+        data: serializeUser(user, true),
       });
     } else {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -150,18 +142,11 @@ const googleLogin = async (req, res) => {
       });
     }
 
+    await syncPremiumMembership(user);
+
     return res.json({
       success: true,
-      data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        role: user.role || 'user',
-        package: user.package || 'free',
-        status: user.status || 'active',
-        token: generateToken(user._id),
-      },
+      data: { ...serializeUser(user), token: generateToken(user._id) },
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });

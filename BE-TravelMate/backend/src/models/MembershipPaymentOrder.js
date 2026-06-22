@@ -29,6 +29,11 @@ const membershipPaymentOrderSchema = new mongoose.Schema(
       required: true,
       default: 10000,
     },
+    durationDays: {
+      type: Number,
+      required: true,
+      default: 30,
+    },
     status: {
       type: String,
       enum: ['PENDING', 'PAID', 'CANCELLED', 'EXPIRED', 'FAILED'],
@@ -44,6 +49,8 @@ const membershipPaymentOrderSchema = new mongoose.Schema(
     webhookPayload: Object,
     paidAt: Date,
     cancelledAt: Date,
+    premiumStartedAt: Date,
+    premiumExpiresAt: Date,
   },
   { timestamps: true }
 );

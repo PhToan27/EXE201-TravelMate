@@ -8,6 +8,7 @@ const {
   deleteJournal,
 } = require('../controllers/journal.controller');
 const { protect } = require('../middlewares/auth.middleware');
+const { syncPremiumMembership } = require('../services/membership.service');
 
 const router = express.Router();
 
@@ -20,14 +21,16 @@ const upload = multer({
 });
 
 // Middleware to restrict access to Premium users only
-const premiumOnly = (req, res, next) => {
-  if (req.user && req.user.package === 'premium') {
-    next();
-  } else {
+const premiumOnly = async (req, res, next) => {
+  try {
+    const user = await syncPremiumMembership(req.user);
+    if (user?.package === 'premium') return next();
     return res.status(403).json({
       success: false,
       message: 'Premium subscription required',
     });
+  } catch (error) {
+    return next(error);
   }
 };
 

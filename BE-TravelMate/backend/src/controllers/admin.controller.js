@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const Trip = require('../models/Trip');
 const AdminSetting = require('../models/AdminSetting');
+const { grantPremiumMembership, revokePremiumMembership } = require('../services/membership.service');
 
 /**
  * @desc    Get dashboard statistics
@@ -177,13 +178,20 @@ const updateUserPackage = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    user.package = pkg;
-    await user.save();
+    if (pkg === 'premium') {
+      await grantPremiumMembership(user);
+    } else {
+      await revokePremiumMembership(user);
+    }
 
     return res.json({
       success: true,
       message: `User package updated to ${pkg}`,
-      data: { _id: user._id, package: user.package },
+      data: {
+        _id: user._id,
+        package: user.package,
+        premiumExpiresAt: user.premiumExpiresAt,
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

@@ -1,6 +1,11 @@
 const MembershipPaymentOrder = require('../models/MembershipPaymentOrder');
 const User = require('../models/User');
 const payosService = require('../services/payos.service');
+const {
+  getPremiumDurationDays,
+  grantPremiumMembership,
+  syncPremiumMembership,
+} = require('../services/membership.service');
 
 const PREMIUM_PACKAGE_PRICE = Number(process.env.PREMIUM_PACKAGE_PRICE || 10000);
 
@@ -20,14 +25,6 @@ const isPaidPayosData = (data = {}) =>
 
 const normalizePayosData = (payload = {}) => payload.data || payload;
 
-const upgradeUserToPremium = async (userId) => {
-  const user = await User.findById(userId);
-  if (!user) return null;
-  user.package = 'premium';
-  await user.save();
-  return user;
-};
-
 const buildOrderCode = () => Number(Date.now());
 
 const buildOrderResponse = (order, user) => ({
@@ -40,13 +37,48 @@ const buildOrderResponse = (order, user) => ({
   qrCode: order.qrCode,
   deeplink: order.deeplink,
   paymentLinkId: order.paymentLinkId,
+  durationDays: order.durationDays,
+  premiumStartedAt: order.premiumStartedAt || user?.premiumStartedAt || null,
+  premiumExpiresAt: order.premiumExpiresAt || user?.premiumExpiresAt || null,
   userPackage: user?.package,
 });
+
+// Claim the order once before granting access. Both the PayOS webhook and the
+// client status check may arrive, so only the first request can add a month.
+const markOrderPaid = async (order, paymentData = {}) => {
+  const updates = {
+    status: 'PAID',
+    paidAt: order.paidAt || new Date(),
+    ...paymentData,
+  };
+  const paidOrder = await MembershipPaymentOrder.findOneAndUpdate(
+    { _id: order._id, status: { $ne: 'PAID' } },
+    { $set: updates },
+    { new: true }
+  );
+
+  if (!paidOrder) {
+    const [existingOrder, existingUser] = await Promise.all([
+      MembershipPaymentOrder.findByIdAndUpdate(order._id, { $set: paymentData }, { new: true }),
+      User.findById(order.userId),
+    ]);
+    return { order: existingOrder || order, user: existingUser };
+  }
+
+  const user = await User.findById(paidOrder.userId);
+  if (!user) throw new Error('User not found');
+
+  const upgradedUser = await grantPremiumMembership(user, paidOrder.durationDays);
+  paidOrder.premiumStartedAt = upgradedUser.premiumStartedAt;
+  paidOrder.premiumExpiresAt = upgradedUser.premiumExpiresAt;
+  await paidOrder.save();
+  return { order: paidOrder, user: upgradedUser };
+};
 
 const createPremiumPayment = async (req, res) => {
   let order;
   try {
-    const user = await User.findById(req.user._id);
+    const user = await syncPremiumMembership(await User.findById(req.user._id));
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -62,7 +94,8 @@ const createPremiumPayment = async (req, res) => {
       userId: user._id,
       orderCode: buildOrderCode(),
       amount: PREMIUM_PACKAGE_PRICE,
-      description: 'PREMIUM',
+      durationDays: getPremiumDurationDays(),
+      description: 'TM PREMIUM 30D',
     });
 
     const payosPayload = await payosService.createPaymentLink({
@@ -105,7 +138,7 @@ const createPremiumPayment = async (req, res) => {
 
 const syncPremiumPaymentStatus = async (req, res) => {
   try {
-    const order = await MembershipPaymentOrder.findOne({
+    let order = await MembershipPaymentOrder.findOne({
       orderCode: Number(req.params.orderCode),
       userId: req.user._id,
     });
@@ -116,23 +149,27 @@ const syncPremiumPaymentStatus = async (req, res) => {
 
     const payosPayload = await payosService.getPaymentLinkInformation(order.orderCode);
     const data = normalizePayosData(payosPayload);
-    order.payosResponse = payosPayload;
 
-    let user = req.user;
+    let user;
     if (isPaidPayosData(data)) {
-      order.status = 'PAID';
-      order.paidAt = order.paidAt || new Date();
-      user = await upgradeUserToPremium(order.userId);
-    } else if (data.status === 'CANCELLED') {
-      order.status = 'CANCELLED';
-      order.cancelledAt = order.cancelledAt || new Date();
-    } else if (data.status === 'EXPIRED') {
-      order.status = 'EXPIRED';
+      const paidResult = await markOrderPaid(order, { payosResponse: payosPayload });
+      order = paidResult.order;
+      user = paidResult.user;
     } else {
-      order.status = 'PENDING';
+      order.payosResponse = payosPayload;
+      if (data.status === 'CANCELLED') {
+        order.status = 'CANCELLED';
+        order.cancelledAt = order.cancelledAt || new Date();
+      } else if (data.status === 'EXPIRED') {
+        order.status = 'EXPIRED';
+      } else {
+        order.status = 'PENDING';
+      }
     }
 
-    await order.save();
+    if (order.status !== 'PAID') await order.save();
+
+    user = user || await syncPremiumMembership(await User.findById(req.user._id));
 
     return res.json({
       success: true,
@@ -193,16 +230,14 @@ const handlePayosWebhook = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment order not found' });
     }
 
-    order.webhookPayload = req.body;
     if (isPaidPayosData(data)) {
-      order.status = 'PAID';
-      order.paidAt = order.paidAt || new Date();
-      await upgradeUserToPremium(order.userId);
+      await markOrderPaid(order, { webhookPayload: req.body });
     } else if (data.status === 'CANCELLED') {
+      order.webhookPayload = req.body;
       order.status = 'CANCELLED';
       order.cancelledAt = order.cancelledAt || new Date();
+      await order.save();
     }
-    await order.save();
 
     // PayOS treats a 2xx response as an acknowledged callback. Keep its
     // standard code/desc fields so the endpoint is also easy to verify in

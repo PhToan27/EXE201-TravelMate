@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { syncPremiumMembership } = require('../services/membership.service');
 
 const protect = async (req, res, next) => {
   let token;
@@ -21,6 +22,8 @@ const protect = async (req, res, next) => {
       if (!req.user) {
         return res.status(401).json({ success: false, message: 'Not authorized, user not found' });
       }
+
+      await syncPremiumMembership(req.user);
 
       return next();
     } catch (error) {

@@ -31,6 +31,8 @@ const dateText = (v) => {
   return Number.isNaN(d.getTime()) ? String(v).slice(0, 10) : d.toLocaleDateString('vi-VN');
 };
 
+const premiumExpiryText = (value) => value ? dateText(value) : 'chưa có thông tin';
+
 const readStoredJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 
 const initialTripForm = {
@@ -1877,7 +1879,13 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
       const r = silent ? await task().catch(() => null) : await run(task, 'Da kiem tra thanh toan.');
       if (r?.data?.status === 'PAID') {
         await loadProfile();
-        const u = { ...user, package: 'premium', token };
+        const u = {
+          ...user,
+          package: r.data.userPackage || 'premium',
+          premiumStartedAt: r.data.premiumStartedAt || user?.premiumStartedAt || null,
+          premiumExpiresAt: r.data.premiumExpiresAt || user?.premiumExpiresAt || null,
+          token,
+        };
         setUser(u);
         localStorage.setItem('travelmate.web.user', JSON.stringify(u));
         localStorage.removeItem(paymentOrderStorageKey);
@@ -1905,6 +1913,7 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
           <h2>{user?.name || 'Người dùng'}</h2>
           <p>{user?.email}</p>
           <div className="profile-badge">{user?.package || 'free'}</div>
+          {user?.package === 'premium' && <p className="muted">Premium đến {premiumExpiryText(user?.premiumExpiresAt)}</p>}
         </div>
       </div>
       <div className="content-grid">

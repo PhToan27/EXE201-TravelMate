@@ -16,6 +16,13 @@ import useTrip from '../../hooks/useTrip';
 import { createPremiumPayment, getPremiumPaymentStatus } from '../../services/auth/authApi';
 import { COLORS, SPACING, RADIUS } from '../../utils/constants';
 
+const premiumExpiryText = (value) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString('vi-VN')
+    : 'chưa có thông tin';
+};
+
 const ProfileScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user, logout, refreshProfile } = useAuth();
@@ -112,6 +119,20 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity style={[styles.premiumButton, upgrading && styles.premiumButtonDisabled]} onPress={handleUpgrade} disabled={upgrading} activeOpacity={0.85}>
             {upgrading ? <Text style={styles.premiumButtonText}>Đang mở PayOS...</Text> : <><Ionicons name="card-outline" size={18} color={COLORS.white} /><Text style={styles.premiumButtonText}>Mua Premium - 10.000 đ</Text></>}
           </TouchableOpacity>
+        </View>
+      )}
+
+      {user?.package === 'premium' && (
+        <View style={[styles.premiumCard, styles.activePremiumCard]}>
+          <View style={styles.premiumCopy}>
+            <View style={styles.premiumIcon}>
+              <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.premiumTitle}>Premium đang hoạt động</Text>
+              <Text style={styles.premiumSubtitle}>Hiệu lực đến {premiumExpiryText(user.premiumExpiresAt)}.</Text>
+            </View>
+          </View>
         </View>
       )}
 
@@ -213,6 +234,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primaryLight,
     gap: SPACING.md,
+  },
+  activePremiumCard: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
   },
   premiumCopy: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   premiumIcon: {
