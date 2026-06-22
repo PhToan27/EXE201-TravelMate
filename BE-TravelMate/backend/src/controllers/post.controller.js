@@ -126,7 +126,16 @@ const uploadImage = (file) => new Promise((resolve, reject) => {
 
 const getPosts = async (req, res) => {
   try {
-    const posts = await Post.find({ status: 'approved' })
+    const query = req.user?._id
+      ? {
+          $or: [
+            { status: 'approved' },
+            { author: req.user._id, status: { $in: ['pending', 'rejected'] } },
+          ],
+        }
+      : { status: 'approved' };
+
+    const posts = await Post.find(query)
       .populate('author', 'name email following followers role')
       .populate('comments.author', 'name email')
       .sort({ createdAt: -1 })

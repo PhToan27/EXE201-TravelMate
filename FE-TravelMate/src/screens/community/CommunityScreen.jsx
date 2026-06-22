@@ -45,9 +45,6 @@ const CommunityScreen = ({ navigation }) => {
     try {
       const result = await postApi.getPosts(feed === 'latest' ? {} : { feed });
       if (result.success) {
-        if (result.data) {
-          setPosts((current) => [result.data, ...current.filter((post) => post._id !== result.data._id)]);
-        }
         setPosts(result.data || []);
       }
     } catch (error) {
@@ -98,6 +95,9 @@ const CommunityScreen = ({ navigation }) => {
 
       if (result.success) {
         setForm({ title: '', content: '', category: 'Mới nhất', image: null });
+        if (result.data) {
+          setPosts((current) => [result.data, ...current.filter((post) => post._id !== result.data._id)]);
+        }
         setIsComposerOpen(false);
         Alert.alert('Đã gửi bài', result.message || 'Bài viết của bạn đang được phê duyệt');
       }
@@ -230,6 +230,11 @@ const PostCard = ({ post, onPress, onAuthorPress }) => (
       </View>
     </TouchableOpacity>
     <Text style={styles.cardTitle}>{post.title}</Text>
+    {post.status && post.status !== 'approved' && (
+      <Text style={[styles.statusBadge, post.status === 'rejected' && styles.statusBadgeRejected]}>
+        {post.status === 'pending' ? 'Đang chờ duyệt' : 'Bị từ chối'}
+      </Text>
+    )}
     <Text style={styles.excerpt} numberOfLines={2}>{post.excerpt || post.content}</Text>
     <View style={styles.cardFooter}>
       <View style={styles.stats}>
@@ -315,6 +320,21 @@ const styles = StyleSheet.create({
   },
   authorName: { fontSize: 12, fontWeight: '700', color: COLORS.black },
   cardTitle: { fontSize: 16, fontWeight: '800', color: COLORS.black, marginTop: SPACING.sm },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: COLORS.warningLight || '#FFF4D6',
+    color: COLORS.warning || '#F59E0B',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  statusBadgeRejected: {
+    backgroundColor: COLORS.errorLight || '#FEE2E2',
+    color: COLORS.error,
+  },
   excerpt: { fontSize: 12, color: COLORS.gray[600], lineHeight: 18, marginTop: 4 },
   cardFooter: {
     flexDirection: 'row',

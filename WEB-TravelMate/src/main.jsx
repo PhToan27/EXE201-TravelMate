@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, Backpack, Bell, BookOpen, CalendarDays, Car, ChartNoAxesCombined,
   Check, ChevronDown, CircleUserRound, CloudRain, CloudSun, Compass, FileText, Flag,
   Home, Hotel, ImagePlus, Link2, LocateFixed, LogOut, Map, MapPinned, Menu, MessageCircle,
-  Navigation, Pencil, Plane, Plus, Printer, Receipt, RotateCcw, Route, Search, Send, Settings,
+  Navigation, Pencil, Plane, Plus, Printer, Receipt, RotateCcw, Route, Search, Send,
   ShieldCheck, Sparkles, Sun, ThumbsUp, Trash2, Umbrella, UserPlus, UsersRound, WalletCards,
   X, Zap,
 } from 'lucide-react';
@@ -17,6 +17,36 @@ const LEGACY_API_BASE_URL = 'https://exe201-travelmate.onrender.com/api';
 const getInitialApiBaseUrl = () => {
   const storedUrl = localStorage.getItem('travelmate.web.apiBaseUrl');
   return storedUrl === LEGACY_API_BASE_URL ? DEFAULT_API_BASE_URL : (storedUrl || DEFAULT_API_BASE_URL);
+};
+
+const TAB_PATHS = {
+  home: '/',
+  places: '/places',
+  trips: '/trips',
+  tools: '/tools',
+  create: '/tools/create-trip',
+  preview: '/tools/preview',
+  expenses: '/tools/expenses',
+  journals: '/tools/journals',
+  weather: '/tools/weather',
+  shared: '/tools/shared',
+  community: '/community',
+  profile: '/profile',
+  admin: '/admin',
+};
+
+const getRouteState = (pathname = window.location.pathname) => {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  const tripMatch = path.match(/^\/trips\/([^/]+)$/);
+  if (tripMatch) return { tab: 'tripDetail', tripId: decodeURIComponent(tripMatch[1]) };
+
+  const tab = Object.entries(TAB_PATHS).find(([, routePath]) => routePath === path)?.[0] || 'home';
+  return { tab, tripId: null };
+};
+
+const getPathForTab = (tab, options = {}) => {
+  if (tab === 'tripDetail' && options.tripId) return `/trips/${encodeURIComponent(options.tripId)}`;
+  return TAB_PATHS[tab] || '/';
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -99,10 +129,11 @@ const WeatherIcon = ({ type, size = 22 }) => {
    APP
    ═══════════════════════════════════════════════════════════ */
 function App() {
-  const [apiBaseUrl, setApiBaseUrl] = useState(getInitialApiBaseUrl);
+  const [apiBaseUrl] = useState(getInitialApiBaseUrl);
   const [token, setToken] = useState(localStorage.getItem('travelmate.web.token') || '');
   const [user, setUser] = useState(readStoredJson('travelmate.web.user'));
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState(() => getRouteState().tab);
+  const [routeTripId, setRouteTripId] = useState(() => getRouteState().tripId);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -145,7 +176,29 @@ function App() {
   const clearSession = () => { setToken(''); setUser(null); setTrips([]); setSelectedTrip(null); localStorage.removeItem('travelmate.web.token'); localStorage.removeItem('travelmate.web.user'); };
 
   const loadTrips = async () => { if (!token) return; const r = await run(() => api('/trips')); if (r?.data) setTrips(r.data); };
-  const loadTripDetail = async (id) => { const r = await run(() => api(`/trips/${id}`)); if (r?.data) { setSelectedTrip(r.data); setActiveTab('tripDetail'); } };
+  const navigateTo = (tab, options = {}) => {
+    const path = getPathForTab(tab, options);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const nextState = { tab, tripId: options.tripId || null };
+
+    if (options.replace) {
+      window.history.replaceState(nextState, '', path);
+    } else if (currentPath !== path) {
+      window.history.pushState(nextState, '', path);
+    }
+
+    setActiveTab(tab);
+    setRouteTripId(options.tripId || null);
+    setMobileMenuOpen(false);
+    setDropdownOpen(false);
+  };
+  const loadTripDetail = async (id, options = {}) => {
+    const r = await run(() => api(`/trips/${id}`));
+    if (r?.data) {
+      setSelectedTrip(r.data);
+      navigateTo('tripDetail', { tripId: id, replace: options.replace });
+    }
+  };
   const loadProfile = async () => { const r = await run(() => api('/auth/profile')); if (r?.data) { const u = { ...user, ...r.data, token }; setUser(u); localStorage.setItem('travelmate.web.user', JSON.stringify(u)); } };
   const loadNotifications = async () => {
     if (!token) return;
@@ -158,16 +211,35 @@ function App() {
   };
 
   useEffect(() => { if (token) { loadTrips(); loadProfile(); loadNotifications(); } }, [token]);
+  useEffect(() => {
+    const syncFromBrowserRoute = () => {
+      const route = getRouteState();
+      setActiveTab(route.tab);
+      setRouteTripId(route.tripId);
+      setMobileMenuOpen(false);
+      setDropdownOpen(false);
+      setNotificationOpen(false);
+    };
+
+    window.history.replaceState(getRouteState(), '', `${window.location.pathname}${window.location.search}`);
+    window.addEventListener('popstate', syncFromBrowserRoute);
+    return () => window.removeEventListener('popstate', syncFromBrowserRoute);
+  }, []);
+  useEffect(() => {
+    if (token && activeTab === 'tripDetail' && routeTripId && selectedTrip?._id !== routeTripId) {
+      loadTripDetail(routeTripId, { replace: true });
+    }
+  }, [token, activeTab, routeTripId, selectedTrip?._id]);
   useEffect(() => { if (message) { const t = setTimeout(() => setMessage(''), 4000); return () => clearTimeout(t); } }, [message]);
 
-  if (!token) return <AuthPanel api={api} run={run} saveSession={saveSession} apiBaseUrl={apiBaseUrl} setApiBaseUrl={setApiBaseUrl} />;
+  if (!token) return <AuthPanel api={api} run={run} saveSession={saveSession} />;
 
   const firstName = user?.name?.split(' ').pop() || 'bạn';
 
-  const tabTitles = { home: 'Trang chủ', trips: 'Chuyến đi', create: 'Tạo chuyến đi', preview: 'Preview AI', places: 'Địa điểm', expenses: 'Chi phí', journals: 'Nhật ký', community: 'Cộng đồng', weather: 'Thời tiết', shared: 'Chia sẻ', profile: 'Hồ sơ', admin: 'Admin', tripDetail: 'Chi tiết chuyến đi' };
-  const tabSubtitles = { home: `Xin chào, ${firstName}!`, trips: `${trips.length} chuyến đi`, create: 'Lên kế hoạch với AI', preview: 'Xem trước lịch trình', places: 'Tìm kiếm & dẫn đường', expenses: 'Quản lý ngân sách', journals: 'Ghi lại khoảnh khắc', community: 'Chia sẻ trải nghiệm', weather: 'Dự báo điểm đến', shared: 'Mở bằng mã chia sẻ', profile: 'Thông tin cá nhân', admin: 'Quản lý hệ thống', tripDetail: selectedTrip?.destination || '' };
+  const tabTitles = { home: 'Trang chủ', trips: 'Chuyến đi', tools: 'Công cụ', create: 'Tạo chuyến đi', preview: 'Preview AI', places: 'Địa điểm', expenses: 'Chi phí', journals: 'Nhật ký', community: 'Cộng đồng', weather: 'Thời tiết', shared: 'Chia sẻ', profile: 'Hồ sơ', admin: 'Admin', tripDetail: 'Chi tiết chuyến đi' };
+  const tabSubtitles = { home: `Xin chào, ${firstName}!`, trips: `${trips.length} chuyến đi`, tools: 'Tạo lịch trình, quản lý chi phí và tra cứu tiện ích', create: 'Lên kế hoạch với AI', preview: 'Xem trước lịch trình', places: 'Tìm kiếm & dẫn đường', expenses: 'Quản lý ngân sách', journals: 'Ghi lại khoảnh khắc', community: 'Chia sẻ trải nghiệm', weather: 'Dự báo điểm đến', shared: 'Mở bằng mã chia sẻ', profile: 'Thông tin cá nhân', admin: 'Quản lý hệ thống', tripDetail: selectedTrip?.destination || '' };
 
-  const go = (tab) => { setActiveTab(tab); setMobileMenuOpen(false); };
+  const go = (tab, options = {}) => navigateTo(tab, options);
   const unreadNotifications = notifications.filter((notification) => !notification.readAt && !notification.isRead).length;
 
   return (
@@ -191,7 +263,7 @@ function App() {
             <button className={`nav-link ${activeTab === 'community' ? 'active' : ''}`} onClick={() => go('community')}>Cộng đồng</button>
             
             <div className={`nav-dropdown ${dropdownOpen ? 'clicked' : ''}`} onMouseLeave={() => setDropdownOpen(false)}>
-              <button className="nav-link dropdown-toggle" onClick={() => setDropdownOpen(!dropdownOpen)} style={{ cursor: 'pointer' }}>Công cụ <UiIcon icon={ChevronDown} size={15} /></button>
+              <button className={`nav-link dropdown-toggle ${['tools', 'create', 'preview', 'expenses', 'journals', 'weather', 'shared', 'admin'].includes(activeTab) ? 'active' : ''}`} onClick={() => { go('tools'); setDropdownOpen(!dropdownOpen); }} style={{ cursor: 'pointer' }}>Công cụ <UiIcon icon={ChevronDown} size={15} /></button>
               <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`}>
                 <button onClick={() => { go('create'); setDropdownOpen(false); }}><UiIcon icon={Plane} />Tạo chuyến đi</button>
                 <button onClick={() => { go('preview'); setDropdownOpen(false); }}><UiIcon icon={Sparkles} />Preview AI</button>
@@ -222,7 +294,6 @@ function App() {
               </div>}
             </div>
             <button className="logout-btn" onClick={clearSession} title="Đăng xuất" aria-label="Đăng xuất"><UiIcon icon={LogOut} size={19} /></button>
-            <button className="ghost" title="Cấu hình API" aria-label="Cấu hình API" onClick={() => { const u = prompt('API URL:', apiBaseUrl); if (u) { setApiBaseUrl(u); localStorage.setItem('travelmate.web.apiBaseUrl', u); } }}><UiIcon icon={Settings} size={18} /></button>
           </div>
         </div>
       </header>
@@ -237,7 +308,8 @@ function App() {
 
           {activeTab === 'home' && <HomePanel api={api} run={run} firstName={firstName} go={go} setPreview={setPreview} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
           {activeTab === 'trips' && <TripsPanel trips={trips} loadTrips={loadTrips} loadTripDetail={loadTripDetail} go={go} />}
-          {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={(t) => { setSelectedTrip(t); loadTrips(); setActiveTab('tripDetail'); }} />}
+          {activeTab === 'tools' && <ToolsPanel go={go} user={user} />}
+          {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={(t) => { setSelectedTrip(t); loadTrips(); go('tripDetail', { tripId: t._id || t.id }); }} />}
           {activeTab === 'preview' && <PreviewPanel api={api} run={run} preview={preview} setPreview={setPreview} />}
           {activeTab === 'places' && <PlacesPanel api={api} run={run} places={places} setPlaces={setPlaces} />}
           {activeTab === 'expenses' && <ExpensesPanel api={api} run={run} trips={trips} expenses={expenses} setExpenses={setExpenses} />}
@@ -254,13 +326,46 @@ function App() {
   );
 }
 
+function ToolsPanel({ go, user }) {
+  const tools = [
+    { tab: 'create', title: 'Tạo chuyến đi', desc: 'Lập kế hoạch mới từ điểm đến, ngày đi, ngân sách và sở thích.', icon: Plane },
+    { tab: 'preview', title: 'Gợi ý lịch trình', desc: 'Xem trước lịch trình AI trước khi lưu thành chuyến đi.', icon: Sparkles },
+    { tab: 'expenses', title: 'Chi phí', desc: 'Theo dõi ngân sách, khoản chi và bill đã nhập.', icon: WalletCards },
+    { tab: 'journals', title: 'Nhật ký', desc: 'Lưu ảnh và câu chuyện trong chuyến đi dành cho Premium.', icon: BookOpen },
+    { tab: 'weather', title: 'Thời tiết', desc: 'Xem dự báo để chọn hoạt động phù hợp.', icon: CloudSun },
+    { tab: 'shared', title: 'Chia sẻ', desc: 'Mở lịch trình được chia sẻ bằng mã hoặc đường dẫn.', icon: Link2 },
+  ];
+  if (user?.role === 'admin') {
+    tools.push({ tab: 'admin', title: 'Admin', desc: 'Quản lý người dùng, bài viết và thiết lập hệ thống.', icon: ShieldCheck });
+  }
+
+  return (
+    <div className="animate-in">
+      <div className="section-header">
+        <div>
+          <h2>Công cụ TravelMate</h2>
+          <p>Chọn nhanh chức năng bạn muốn dùng.</p>
+        </div>
+      </div>
+      <div className="content-grid-3">
+        {tools.map((tool) => (
+          <button key={tool.tab} type="button" className="card card-pad tool-card" onClick={() => go(tool.tab)}>
+            <div className="item-icon"><UiIcon icon={tool.icon} /></div>
+            <h3>{tool.title}</h3>
+            <p>{tool.desc}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    AUTH
    ═══════════════════════════════════════════════════════════ */
-function AuthPanel({ api, run, saveSession, apiBaseUrl, setApiBaseUrl }) {
+function AuthPanel({ api, run, saveSession }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
-  const [showApi, setShowApi] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -271,54 +376,50 @@ function AuthPanel({ api, run, saveSession, apiBaseUrl, setApiBaseUrl }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-hero">
-        <div className="auth-hero-logo"><UiIcon icon={Plane} size={34} /></div>
-        <h1>TravelMate</h1>
-        <p>Lên kế hoạch du lịch thông minh, quản lý chi phí và khám phá địa điểm với trợ lý AI</p>
-        <div className="auth-features">
-          <div className="auth-feature">
-            <div className="auth-feature-icon"><UiIcon icon={Map} /></div>
-            <div className="auth-feature-text">Tạo lịch trình AI</div>
-          </div>
-          <div className="auth-feature">
-            <div className="auth-feature-icon"><UiIcon icon={WalletCards} /></div>
-            <div className="auth-feature-text">Quản lý chi phí</div>
-          </div>
-          <div className="auth-feature">
-            <div className="auth-feature-icon"><UiIcon icon={UsersRound} /></div>
-            <div className="auth-feature-text">Chia sẻ cộng đồng</div>
-          </div>
-          <div className="auth-feature">
-            <div className="auth-feature-icon"><UiIcon icon={MapPinned} /></div>
-            <div className="auth-feature-text">Khám phá địa điểm</div>
-          </div>
-        </div>
+      <div className="auth-bg-slider" aria-hidden="true">
+        <div className="auth-bg-slide auth-bg-dragon" />
+        <div className="auth-bg-slide auth-bg-bana" />
+        <div className="auth-bg-slide auth-bg-mykhe" />
       </div>
-      <div className="auth-form-side">
-        <h2>{mode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản'}</h2>
-        <p className="auth-subtitle">{mode === 'login' ? 'Đăng nhập để tiếp tục hành trình khám phá cùng TravelMate' : 'Đăng ký để bắt đầu lập kế hoạch du lịch thông minh'}</p>
-        <form className="form-stack" onSubmit={submit}>
-          {mode === 'register' && <TextInput label="Họ và tên" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />}
-          <TextInput label="Email" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
-          <TextInput label="Mật khẩu" type="password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
-          <button className="auth-submit-btn" type="submit">
-            {mode === 'login' ? 'Đăng nhập' : 'Đăng ký'}
-          </button>
-        </form>
-        <div className="auth-switch-row">
-          <span>{mode === 'login' ? 'Bạn chưa có tài khoản?' : 'Đã có tài khoản?'}</span>
-          <button className="auth-switch-link" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? ' Đăng ký ngay' : ' Đăng nhập'}
-          </button>
-        </div>
-        <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <button className="ghost icon-text" type="button" onClick={() => setShowApi(!showApi)} style={{ fontSize: 11, color: 'var(--gray-400)' }}><UiIcon icon={Settings} size={15} />Cấu hình API</button>
-          {showApi && (
-            <div className="api-config" style={{ marginTop: 8 }}>
-              <input value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} />
-              <button type="button" onClick={() => localStorage.setItem('travelmate.web.apiBaseUrl', apiBaseUrl)}>Lưu</button>
+
+      <div className="auth-slide-labels" aria-hidden="true">
+        <span>Cầu Rồng, Đà Nẵng</span>
+        <span>Bà Nà Hills</span>
+        <span>Biển Mỹ Khê</span>
+      </div>
+
+      <div className="auth-center-shell">
+        <div className="auth-form-side">
+          <div className="auth-card-brand">
+            <div className="auth-hero-logo"><UiIcon icon={Plane} size={30} /></div>
+            <div>
+              <h1>TravelMate</h1>
+              <p>Lịch trình thông minh cho những chuyến đi Đà Nẵng đáng nhớ.</p>
             </div>
-          )}
+          </div>
+
+          <div className="auth-feature-row">
+            <span><UiIcon icon={Map} size={15} />AI lịch trình</span>
+            <span><UiIcon icon={WalletCards} size={15} />Chi phí</span>
+            <span><UiIcon icon={MapPinned} size={15} />Địa điểm</span>
+          </div>
+
+          <h2>{mode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản'}</h2>
+          <p className="auth-subtitle">{mode === 'login' ? 'Đăng nhập để tiếp tục hành trình khám phá cùng TravelMate' : 'Đăng ký để bắt đầu lập kế hoạch du lịch thông minh'}</p>
+          <form className="form-stack" onSubmit={submit}>
+            {mode === 'register' && <TextInput label="Họ và tên" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />}
+            <TextInput label="Email" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
+            <TextInput label="Mật khẩu" type="password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
+            <button className="auth-submit-btn" type="submit">
+              {mode === 'login' ? 'Đăng nhập' : 'Đăng ký'}
+            </button>
+          </form>
+          <div className="auth-switch-row">
+            <span>{mode === 'login' ? 'Bạn chưa có tài khoản?' : 'Đã có tài khoản?'}</span>
+            <button className="auth-switch-link" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+              {mode === 'login' ? ' Đăng ký ngay' : ' Đăng nhập'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1176,6 +1277,7 @@ function TripEditor({ trip, api, run, onCancel, onSaved }) {
   const [restaurants, setRestaurants] = useState(() => (trip.restaurantRecommendations || []).map((restaurant) => ({ ...restaurant })));
   const [placeQuery, setPlaceQuery] = useState('');
   const [placeResults, setPlaceResults] = useState([]);
+  const [activityPlaceSearches, setActivityPlaceSearches] = useState({});
 
   const patchActivity = (index, key, value) => {
     setActivities((items) => items.map((activity, itemIndex) => itemIndex === index ? { ...activity, [key]: value } : activity));
@@ -1186,42 +1288,85 @@ function TripEditor({ trip, api, run, onCancel, onSaved }) {
       category: 'PLACE', transport: 'OTHER', cost: 0, durationMinutes: 60,
     }]);
   };
+  const removeActivity = (index) => {
+    setActivities((items) => items.filter((_, itemIndex) => itemIndex !== index));
+    setActivityPlaceSearches((items) => {
+      const next = {};
+      Object.entries(items).forEach(([key, value]) => {
+        const numericKey = Number(key);
+        if (numericKey < index) next[numericKey] = value;
+        if (numericKey > index) next[numericKey - 1] = value;
+      });
+      return next;
+    });
+  };
   const addRestaurant = () => {
     setRestaurants((items) => [...items, { name: '', address: '', cuisineType: '', averagePricePerPerson: 0, description: '' }]);
   };
-  const searchPlaces = async (event) => {
-    event.preventDefault();
+  const buildActivityFromPlace = (place, base = {}) => {
+    const coords = getEntityCoords(place.coordinates, place.location, place);
+    if (!coords) {
+      alert('Địa điểm này chưa có tọa độ hợp lệ để dùng trên bản đồ.');
+      return null;
+    }
+    const categoryText = String(place.category || '').toLowerCase();
+    const category = /ăn|ẩm|food|restaurant|cafe/.test(categoryText) ? 'FOOD' : /hotel|khách sạn|resort/.test(categoryText) ? 'HOTEL' : 'PLACE';
+    const priceMatch = String(place.ticketPrice || '').match(/[0-9][0-9.,\s]*/);
+    const cost = priceMatch ? Number(priceMatch[0].replace(/\D/g, '')) || 0 : Number(base.cost || 0);
+
+    return {
+      ...base,
+      location: place.name || '',
+      address: place.address || '',
+      description: place.introduction || place.description || base.description || '',
+      category,
+      cost,
+      placeId: place._id,
+      coordinates: coords,
+    };
+  };
+  const searchPlaces = async () => {
     const query = placeQuery.trim();
     if (!query) return;
     const result = await run(() => api(`/places/search?q=${encodeURIComponent(query)}&limit=8`));
     if (result?.data) setPlaceResults(result.data);
   };
   const addPlaceToItinerary = (place) => {
-    const coords = getEntityCoords(place.coordinates, place.location, place);
-    if (!coords) {
-      alert('Địa điểm này chưa có tọa độ hợp lệ để dùng trên bản đồ.');
-      return;
-    }
-    const categoryText = String(place.category || '').toLowerCase();
-    const category = /ăn|ẩm|food|restaurant|cafe/.test(categoryText) ? 'FOOD' : /hotel|khách sạn|resort/.test(categoryText) ? 'HOTEL' : 'PLACE';
-    const priceMatch = String(place.ticketPrice || '').match(/[0-9][0-9.,\s]*/);
-    const cost = priceMatch ? Number(priceMatch[0].replace(/\D/g, '')) || 0 : 0;
-    setActivities((items) => [...items, {
+    const activity = buildActivityFromPlace(place, {
       day: 1,
       time: '08:00',
       endTime: '',
-      location: place.name || '',
-      address: place.address || '',
-      description: place.introduction || place.description || '',
-      category,
       transport: 'OTHER',
-      cost,
       durationMinutes: 60,
-      placeId: place._id,
-      coordinates: coords,
-    }]);
+    });
+    if (!activity) return;
+    setActivities((items) => [...items, activity]);
     setPlaceResults([]);
     setPlaceQuery('');
+  };
+  const setActivityPlaceQuery = (index, query) => {
+    setActivityPlaceSearches((items) => ({
+      ...items,
+      [index]: { ...(items[index] || {}), query },
+    }));
+  };
+  const searchActivityPlaces = async (index) => {
+    const query = String(activityPlaceSearches[index]?.query || '').trim();
+    if (!query) return;
+    const result = await run(() => api(`/places/search?q=${encodeURIComponent(query)}&limit=6`));
+    setActivityPlaceSearches((items) => ({
+      ...items,
+      [index]: { ...(items[index] || {}), results: result?.data || [] },
+    }));
+  };
+  const applyPlaceToActivity = (index, place) => {
+    const nextActivity = buildActivityFromPlace(place, activities[index] || {});
+    if (!nextActivity) return;
+    setActivities((items) => items.map((activity, itemIndex) => itemIndex === index ? nextActivity : activity));
+    setActivityPlaceSearches((items) => ({
+      ...items,
+      [index]: { query: '', results: [] },
+    }));
   };
   const save = async (event) => {
     event.preventDefault();
@@ -1278,10 +1423,20 @@ function TripEditor({ trip, api, run, onCancel, onSaved }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <h3>Lịch trình và di chuyển</h3><button className="icon-text" type="button" onClick={addActivity}><UiIcon icon={Plus} />Thêm hoạt động</button>
           </div>
-          <form className="inline-form" onSubmit={searchPlaces}>
-            <input value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} placeholder="Tìm địa điểm trong TravelMate..." />
-            <button className="icon-text" type="submit"><UiIcon icon={Search} />Tìm</button>
-          </form>
+          <div className="inline-form">
+            <input
+              value={placeQuery}
+              onChange={(event) => setPlaceQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  searchPlaces();
+                }
+              }}
+              placeholder="Tìm địa điểm trong database TravelMate..."
+            />
+            <button className="icon-text" type="button" onClick={searchPlaces}><UiIcon icon={Search} />Tìm</button>
+          </div>
           {placeResults.length > 0 && <div className="editor-place-results">
             {placeResults.map((place) => <div className="editor-place-item" key={place._id || place.name}>
               <div><strong>{place.name}</strong><p>{place.address}</p><small>{place.category} · {place.ticketPrice || 'Miễn phí'}</small></div>
@@ -1295,7 +1450,40 @@ function TripEditor({ trip, api, run, onCancel, onSaved }) {
                 <TextInput label="Ngày" type="number" value={activity.day || 1} onChange={(value) => patchActivity(index, 'day', value)} />
                 <TextInput label="Bắt đầu" type="time" value={activity.time || ''} onChange={(value) => patchActivity(index, 'time', value)} />
                 <TextInput label="Kết thúc" type="time" value={activity.endTime || ''} onChange={(value) => patchActivity(index, 'endTime', value)} />
-                <TextInput label="Địa điểm" value={activity.location || ''} onChange={(value) => patchActivity(index, 'location', value)} />
+                <div className="full activity-place-picker">
+                  <label>Địa điểm trong database</label>
+                  <div className="activity-selected-place">
+                    <div>
+                      <strong>{activity.location || 'Chưa chọn địa điểm'}</strong>
+                      {activity.address && <p>{activity.address}</p>}
+                    </div>
+                    {activity.placeId && <span>Đã chọn lọc</span>}
+                  </div>
+                  <div className="inline-form">
+                    <input
+                      value={activityPlaceSearches[index]?.query || ''}
+                      onChange={(event) => setActivityPlaceQuery(index, event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          searchActivityPlaces(index);
+                        }
+                      }}
+                      placeholder="Nhập tên địa điểm để tìm trên bản đồ..."
+                    />
+                    <button className="icon-text" type="button" onClick={() => searchActivityPlaces(index)}><UiIcon icon={Search} />Tìm</button>
+                  </div>
+                  {(activityPlaceSearches[index]?.results || []).length > 0 && (
+                    <div className="editor-place-results compact">
+                      {activityPlaceSearches[index].results.map((place) => (
+                        <div className="editor-place-item" key={place._id || place.name}>
+                          <div><strong>{place.name}</strong><p>{place.address}</p><small>{place.category} · {place.ticketPrice || 'Miễn phí'}</small></div>
+                          <button className="primary icon-text" type="button" onClick={() => applyPlaceToActivity(index, place)}><UiIcon icon={MapPinned} size={16} />Chọn</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <TextInput label="Danh mục" value={activity.category || 'PLACE'} onChange={(value) => patchActivity(index, 'category', value)} />
                 <TextInput label="Chi phí" type="number" value={activity.cost || 0} onChange={(value) => patchActivity(index, 'cost', value)} />
                 <TextInput label="Di chuyển" value={activity.transport || 'OTHER'} onChange={(value) => patchActivity(index, 'transport', value)} />
@@ -1303,7 +1491,7 @@ function TripEditor({ trip, api, run, onCancel, onSaved }) {
                 <TextInput label="Địa chỉ" value={activity.address || ''} onChange={(value) => patchActivity(index, 'address', value)} />
                 <div className="full"><TextInput label="Mô tả" value={activity.description || ''} onChange={(value) => patchActivity(index, 'description', value)} /></div>
               </div>
-              <button className="danger" type="button" onClick={() => setActivities((items) => items.filter((_, itemIndex) => itemIndex !== index))} style={{ marginTop: 12 }}>Xóa hoạt động</button>
+              <button className="danger" type="button" onClick={() => removeActivity(index)} style={{ marginTop: 12 }}>Xóa hoạt động</button>
             </div>
           ))}
         </div>
@@ -2213,6 +2401,11 @@ function PostList({ posts = [], quickAction }) {
         <div><strong>{p.author?.name || p.authorName || 'TravelMate'}</strong><small>{p.category || 'Du lịch'} · {p.readTime || '5 phút đọc'}</small></div>
       </div>
       <h3>{p.title}</h3>
+      {p.status && p.status !== 'approved' && (
+        <span className={`status-pill ${p.status === 'rejected' ? 'status-pill-danger' : ''}`}>
+          {p.status === 'pending' ? 'Đang chờ duyệt' : 'Bị từ chối'}
+        </span>
+      )}
       {p.imageUrl && <img className="community-post-image" src={p.imageUrl} alt={p.title} loading="lazy" />}
       <p>{p.content || p.excerpt}</p>
       <div className="community-post-stats"><span>{p.likesCount || 0} lượt thích</span><span>{p.commentsCount || (p.comments || []).length} bình luận</span><span>{p.sharesCount || p.shares || 0} lượt chia sẻ</span></div>

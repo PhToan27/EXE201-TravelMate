@@ -81,6 +81,14 @@ const getPlaceCategoryKey = (place) => {
   return 'PLACE';
 };
 
+const normalizePlaceCoordinates = (placeOrCoords) => {
+  const coords = placeOrCoords?.coordinates || placeOrCoords?.location || placeOrCoords || {};
+  const lat = Number(coords.lat ?? coords.latitude ?? placeOrCoords?.lat ?? placeOrCoords?.latitude);
+  const lng = Number(coords.lng ?? coords.longitude ?? placeOrCoords?.lng ?? placeOrCoords?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+};
+
 const getActivityKey = (activity, index) => activity._id || activity.id || activity.clientKey || `local-${index}`;
 
 const parseHour = (timeStr = '') => {
@@ -322,11 +330,12 @@ const EditTripScreen = ({ route, navigation }) => {
     setDraft({
       ...DEFAULT_ACTIVITY,
       location: place.name,
+      placeId: place._id,
       time: getDefaultTime(activePeriod),
       day: selectedDay,
       category: getPlaceCategoryKey(place),
       cost: place.ticketPrice ? String(parsePrice(place.ticketPrice)) : '0',
-      coordinates: place.coordinates || null,
+      coordinates: normalizePlaceCoordinates(place),
       address: place.address || '',
       description: place.introduction || '',
     });
@@ -436,8 +445,14 @@ const EditTripScreen = ({ route, navigation }) => {
   };
 
   const saveDraft = () => {
-    if (!draft.location.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên địa điểm hoặc hoạt động.');
+    if (!draft.location?.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn địa điểm từ database.');
+      return;
+    }
+
+    const normalizedCoordinates = normalizePlaceCoordinates(draft.coordinates);
+    if (!normalizedCoordinates) {
+      Alert.alert('Chưa chọn địa điểm', 'Vui lòng tìm và chọn một địa điểm trong database để có tọa độ dẫn đường.');
       return;
     }
 
@@ -445,6 +460,7 @@ const EditTripScreen = ({ route, navigation }) => {
       ...draft,
       clientKey: draft.clientKey || `local-${Date.now()}`,
       location: draft.location.trim(),
+      coordinates: normalizedCoordinates,
       time: draft.time.trim() || getDefaultTime(activePeriod),
       endTime: draft.endTime?.trim() || '',
       description: draft.description?.trim() || '',
@@ -853,11 +869,12 @@ const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
   const handleSelectResult = (place) => {
     setDraft((prev) => ({
       ...prev,
+      placeId: place._id,
       location: place.name,
       address: place.address || '',
       category: getPlaceCategoryKey(place),
       cost: place.ticketPrice ? String(parsePrice(place.ticketPrice)) : '0',
-      coordinates: place.coordinates || null,
+      coordinates: normalizePlaceCoordinates(place),
       description: place.introduction || '',
     }));
     setSearchText(place.name);
@@ -884,15 +901,25 @@ const ActivityModal = ({ visible, draft, setDraft, onClose, onSave }) => {
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={[styles.formGroup, { zIndex: 5000, position: 'relative' }]}>
                 <Text style={styles.formLabel}>Tên địa điểm</Text>
+                {!!draft.location && (
+                  <View style={styles.selectedPlaceBox}>
+                    <Ionicons name="location" size={18} color={COLORS.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.selectedPlaceTitle}>{draft.location}</Text>
+                      {!!draft.address && <Text style={styles.selectedPlaceAddress} numberOfLines={1}>{draft.address}</Text>}
+                    </View>
+                    {normalizePlaceCoordinates(draft.coordinates) ? (
+                      <View style={styles.dbBadge}><Text style={styles.dbBadgeText}>DB</Text></View>
+                    ) : null}
+                  </View>
+                )}
                 <View style={{ position: 'relative', zIndex: 1000 }}>
-
                   <TextInput
                     value={searchText}
                     onChangeText={(value) => {
                       setSearchText(value);
-                      setDraft((prev) => ({ ...prev, location: value }));
                     }}
-                    placeholder="Ví dụ: Ngũ Hành Sơn"
+                    placeholder={draft.location ? 'Tìm địa điểm khác trong database...' : 'Tìm địa điểm trong database...'}
                     placeholderTextColor={COLORS.gray[400]}
                     style={styles.formInput}
                   />
@@ -1270,6 +1297,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     fontSize: 14,
     color: COLORS.black,
+  },
+  selectedPlaceBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight || COLORS.primary,
+    backgroundColor: COLORS.primaryLight || COLORS.gray[50],
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  selectedPlaceTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.black,
+  },
+  selectedPlaceAddress: {
+    marginTop: 2,
+    fontSize: 11,
+    color: COLORS.gray[600],
+  },
+  dbBadge: {
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  dbBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.white,
   },
   inputRow: {
     flexDirection: 'row',
