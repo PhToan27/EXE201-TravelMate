@@ -1743,7 +1743,12 @@ function CommunityPanel({ api, run, posts, setPosts }) {
   const createPost = async (e) => {
     e.preventDefault();
     const fd = new FormData(); Object.entries(form).forEach(([k, v]) => fd.append(k, v)); if (image) fd.append('image', image);
-    const r = await run(() => api('/posts', { method: 'POST', body: fd }), 'Đã đăng bài.'); if (r) loadPosts();
+    const r = await run(() => api('/posts', { method: 'POST', body: fd }), 'Đã gửi bài, đang chờ duyệt.');
+    if (r?.data) {
+      setPosts((items) => [r.data, ...items.filter((post) => post._id !== r.data._id)]);
+      setForm({ title: '', content: '', category: 'Mới nhất' });
+      setImage(null);
+    }
   };
   const quickAction = async (path, ok, body) => {
     const r = await run(() => api(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }), ok);

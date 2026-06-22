@@ -45,6 +45,9 @@ const CommunityScreen = ({ navigation }) => {
     try {
       const result = await postApi.getPosts(feed === 'latest' ? {} : { feed });
       if (result.success) {
+        if (result.data) {
+          setPosts((current) => [result.data, ...current.filter((post) => post._id !== result.data._id)]);
+        }
         setPosts(result.data || []);
       }
     } catch (error) {
@@ -67,7 +70,7 @@ const CommunityScreen = ({ navigation }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.85,
@@ -97,7 +100,6 @@ const CommunityScreen = ({ navigation }) => {
         setForm({ title: '', content: '', category: 'Mới nhất', image: null });
         setIsComposerOpen(false);
         Alert.alert('Đã gửi bài', result.message || 'Bài viết của bạn đang được phê duyệt');
-        fetchPosts(true, feedMap[activeTab] || 'latest');
       }
     } catch (error) {
       Alert.alert('Chưa đăng được bài', error.response?.data?.message || 'Kiểm tra Cloudinary/env rồi thử lại.');

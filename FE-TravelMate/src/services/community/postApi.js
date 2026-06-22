@@ -1,7 +1,7 @@
 import api from '../api';
 
-export const getPosts = async () => {
-  const response = await api.get('/posts');
+export const getPosts = async (params = {}) => {
+  const response = await api.get('/posts', { params });
   return response.data;
 };
 
@@ -54,11 +54,7 @@ export const createPost = async ({ title, content, category, image }) => {
     });
   }
 
-  const response = await api.post('/posts', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await api.post('/posts', formData);
   return response.data;
 };
 

@@ -190,17 +190,34 @@ const createPost = async (req, res) => {
 
     let imageUrl = req.body.imageUrl;
     let imagePublicId;
+    let uploadWarning = '';
 
     if (req.file) {
-      const uploadResult = await uploadImage(req.file);
-      imageUrl = uploadResult.secure_url;
-      imagePublicId = uploadResult.public_id;
+      try {
+        const uploadResult = await uploadImage(req.file);
+        imageUrl = uploadResult.secure_url;
+        imagePublicId = uploadResult.public_id;
+      } catch (uploadError) {
+        if (uploadError.message === 'Cloudinary environment variables are missing') {
+          uploadWarning = 'Anh chua duoc luu vi server chua cau hinh Cloudinary.';
+        } else {
+        return res.status(400).json({
+          success: false,
+          message: uploadError.message || 'Không thể tải ảnh bài viết. Vui lòng thử ảnh khác.',
+        });
+      }
+    }
+
     }
 
     const moderationResult = moderateText({ title, content });
-    const imageReviewReason = req.file && !process.env.IMAGE_MODERATION_PROVIDER
+    const imageReviewReason = imageUrl && req.file && !process.env.IMAGE_MODERATION_PROVIDER
       ? 'Ảnh đã upload, chờ admin kiểm tra thủ công vì chưa cấu hình image moderation provider.'
       : null;
+
+    if (uploadWarning) {
+      moderationResult.moderation.reasons.push(uploadWarning);
+    }
 
     if (imageReviewReason) {
       moderationResult.moderation.reasons.push(imageReviewReason);

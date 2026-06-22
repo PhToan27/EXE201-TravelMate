@@ -28,6 +28,18 @@ const upload = multer({
   },
 });
 
+const uploadPostImage = (req, res, next) => {
+  upload.single('image')(req, res, (error) => {
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || 'Không thể đọc ảnh bài viết.',
+      });
+    }
+    return next();
+  });
+};
+
 const optionalProtect = async (req, res, next) => {
   if (!req.headers.authorization?.startsWith('Bearer')) {
     return next();
@@ -61,7 +73,7 @@ router.patch('/admin/posts/:id/status', protect, requireModerator, updatePostSta
 
 router.get('/', optionalProtect, getPosts);
 router.get('/:id', optionalProtect, getPostById);
-router.post('/', protect, upload.single('image'), createPost);
+router.post('/', protect, uploadPostImage, createPost);
 router.post('/authors/:authorId/follow', protect, toggleFollowAuthor);
 router.post('/:id/like', protect, toggleLikePost);
 router.post('/:id/comments', protect, addComment);
