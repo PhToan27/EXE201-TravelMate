@@ -31,20 +31,16 @@ const premiumOnly = (req, res, next) => {
   }
 };
 
-// Protect all routes with auth check and premium check
-router.use(protect);
-router.use(premiumOnly);
-
 // Route mappings:
 // 1. Trip journals collection routes (under /api/trips/:tripId/journals)
 router.route('/trips/:tripId/journals')
-  .get(getJournalsByTrip)
-  .post(upload.array('images[]', 20), createJournal);
+  .get(protect, premiumOnly, getJournalsByTrip)
+  .post(protect, premiumOnly, upload.array('images[]', 20), createJournal);
 
 // 2. Specific journal resource routes (under /api/journals/:id)
 router.route('/journals/:id')
-  .get(getJournalById)
-  .put(upload.array('images[]', 20), updateJournal)
-  .delete(deleteJournal);
+  .get(protect, premiumOnly, getJournalById)
+  .put(protect, premiumOnly, upload.array('images[]', 20), updateJournal)
+  .delete(protect, premiumOnly, deleteJournal);
 
 module.exports = router;
