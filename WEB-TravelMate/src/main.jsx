@@ -10,12 +10,215 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
+const safeLocalStorage = {
+  getItem(key) {
+    try {
+      return typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(key) : null;
+    } catch (e) {
+      console.warn('localStorage.getItem error:', e);
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.warn('localStorage.setItem error:', e);
+    }
+  },
+  removeItem(key) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.warn('localStorage.removeItem error:', e);
+    }
+  }
+};
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary-panel notice error" style={{ padding: 24, margin: '20px 0', borderRadius: 12 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: 'var(--error)' }}>⚠️ Đã xảy ra lỗi giao diện</h3>
+          <p style={{ fontSize: 13, marginBottom: 12 }}>
+            Phần giao diện này gặp lỗi bất thường. Bạn có thể nhấn thử lại hoặc chọn một tab khác trên menu.
+          </p>
+          <pre style={{ fontSize: 11, background: 'rgba(0,0,0,0.05)', padding: 10, borderRadius: 6, overflowX: 'auto', maxHeight: 120, color: '#333' }}>
+            {this.state.error?.toString()}
+          </pre>
+          <button className="primary" onClick={() => this.setState({ hasError: false, error: null })} style={{ marginTop: 12, padding: '6px 12px', fontSize: 12 }}>
+            Thử lại
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+class GlobalErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("GlobalErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          padding: 24,
+          background: '#f8fafc',
+          fontFamily: 'Inter, sans-serif',
+          color: '#1e293b',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            maxWidth: 500,
+            background: 'white',
+            padding: 32,
+            borderRadius: 16,
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{
+              fontSize: 48,
+              marginBottom: 16
+            }}>⚠️</div>
+            <h1 style={{
+              fontSize: 20,
+              fontWeight: 800,
+              marginBottom: 12,
+              color: '#0f172a'
+            }}>Đã xảy ra lỗi hệ thống nghiêm trọng</h1>
+            <p style={{
+              fontSize: 14,
+              color: '#64748b',
+              marginBottom: 20,
+              lineHeight: '1.6'
+            }}>
+              Ứng dụng TravelMate không thể tải đúng cách. Vui lòng làm mới trang hoặc thử lại sau.
+            </p>
+            <pre style={{
+              fontSize: 12,
+              background: '#f1f5f9',
+              padding: 12,
+              borderRadius: 8,
+              overflowX: 'auto',
+              maxHeight: 150,
+              textAlign: 'left',
+              color: '#334155',
+              border: '1px solid #e2e8f0',
+              marginBottom: 20
+            }}>
+              {this.state.error?.toString()}
+            </pre>
+            <button 
+              onClick={() => window.location.reload()} 
+              style={{
+                background: '#F97316',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: 8,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.4)'
+              }}
+              onMouseOver={(e) => e.target.style.background = '#ea580c'}
+              onMouseOut={(e) => e.target.style.background = '#F97316'}
+            >
+              Tải lại trang
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function Skeleton({ type = 'text', rows = 3, className = '' }) {
+  if (type === 'list') {
+    return (
+      <div className={`skeleton-list ${className}`} aria-hidden="true" style={{ width: '100%' }}>
+        {Array.from({ length: rows }).map((_, i) => (
+          <div className="skeleton-item" key={i} style={{ display: 'flex', gap: 12, marginBottom: 16, padding: 14, background: 'rgba(255,255,255,0.6)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.3)' }}>
+            <div className="skeleton-pulse" style={{ width: 44, height: 44, borderRadius: 8, background: '#e2e8f0', flexShrink: 0 }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="skeleton-pulse" style={{ width: '40%', height: 14, background: '#e2e8f0', borderRadius: 4, marginBottom: 8 }} />
+              <div className="skeleton-pulse" style={{ width: '70%', height: 11, background: '#e2e8f0', borderRadius: 4 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'card') {
+    return (
+      <div className={`skeleton-card-grid ${className}`} aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16, width: '100%' }}>
+        {Array.from({ length: rows }).map((_, i) => (
+          <div className="skeleton-card" key={i} style={{ padding: 16, background: 'rgba(255,255,255,0.6)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.3)' }}>
+            <div className="skeleton-pulse" style={{ width: '100%', height: 130, background: '#e2e8f0', borderRadius: 8, marginBottom: 12 }} />
+            <div className="skeleton-pulse" style={{ width: '60%', height: 14, background: '#e2e8f0', borderRadius: 4, marginBottom: 8 }} />
+            <div className="skeleton-pulse" style={{ width: '80%', height: 11, background: '#e2e8f0', borderRadius: 4 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`skeleton-text ${className}`} aria-hidden="true" style={{ width: '100%', padding: 12 }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div 
+          className="skeleton-pulse"
+          key={i} 
+          style={{ 
+            width: i === rows - 1 ? '50%' : '100%', 
+            height: 12, 
+            background: '#e2e8f0', 
+            borderRadius: 4, 
+            marginBottom: 10 
+          }} 
+        />
+      ))}
+    </div>
+  );
+}
+
 const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'https://exe201-travelmate-1.onrender.com/api';
 const LEGACY_API_BASE_URL = 'https://exe201-travelmate.onrender.com/api';
 
 const getInitialApiBaseUrl = () => {
-  const storedUrl = localStorage.getItem('travelmate.web.apiBaseUrl');
+  const storedUrl = safeLocalStorage.getItem('travelmate.web.apiBaseUrl');
   return storedUrl === LEGACY_API_BASE_URL ? DEFAULT_API_BASE_URL : (storedUrl || DEFAULT_API_BASE_URL);
 };
 
@@ -63,7 +266,7 @@ const dateText = (v) => {
 
 const premiumExpiryText = (value) => value ? dateText(value) : 'chưa có thông tin';
 
-const readStoredJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
+const readStoredJson = (key) => { try { return JSON.parse(safeLocalStorage.getItem(key) || 'null'); } catch { return null; } };
 
 const initialTripForm = {
   destination: 'Đà Nẵng', startDate: today, endDate: tomorrow, people: 2, budget: 3000000,
@@ -130,10 +333,11 @@ const WeatherIcon = ({ type, size = 22 }) => {
    ═══════════════════════════════════════════════════════════ */
 function App() {
   const [apiBaseUrl] = useState(getInitialApiBaseUrl);
-  const [token, setToken] = useState(localStorage.getItem('travelmate.web.token') || '');
+  const [token, setToken] = useState(safeLocalStorage.getItem('travelmate.web.token') || '');
   const [user, setUser] = useState(readStoredJson('travelmate.web.user'));
   const [activeTab, setActiveTab] = useState(() => getRouteState().tab);
   const [routeTripId, setRouteTripId] = useState(() => getRouteState().tripId);
+  const [routeRenderKey, setRouteRenderKey] = useState(() => `${window.location.pathname}${window.location.search}`);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -172,10 +376,19 @@ function App() {
     finally { setLoading(false); }
   };
 
-  const saveSession = (p) => { setToken(p.token || ''); setUser(p); localStorage.setItem('travelmate.web.token', p.token || ''); localStorage.setItem('travelmate.web.user', JSON.stringify(p)); };
-  const clearSession = () => { setToken(''); setUser(null); setTrips([]); setSelectedTrip(null); localStorage.removeItem('travelmate.web.token'); localStorage.removeItem('travelmate.web.user'); };
+  const saveSession = (p) => { setToken(p.token || ''); setUser(p); safeLocalStorage.setItem('travelmate.web.token', p.token || ''); safeLocalStorage.setItem('travelmate.web.user', JSON.stringify(p)); };
+  const clearSession = () => { setToken(''); setUser(null); setTrips([]); setSelectedTrip(null); safeLocalStorage.removeItem('travelmate.web.token'); safeLocalStorage.removeItem('travelmate.web.user'); };
 
   const loadTrips = async () => { if (!token) return; const r = await run(() => api('/trips')); if (r?.data) setTrips(r.data); };
+  const applyRouteState = (route = getRouteState()) => {
+    setActiveTab(route.tab);
+    setRouteTripId(route.tripId);
+    setRouteRenderKey(`${window.location.pathname}${window.location.search}`);
+    setMobileMenuOpen(false);
+    setDropdownOpen(false);
+    setNotificationOpen(false);
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  };
   const navigateTo = (tab, options = {}) => {
     const path = getPathForTab(tab, options);
     const currentPath = `${window.location.pathname}${window.location.search}`;
@@ -187,10 +400,7 @@ function App() {
       window.history.pushState(nextState, '', path);
     }
 
-    setActiveTab(tab);
-    setRouteTripId(options.tripId || null);
-    setMobileMenuOpen(false);
-    setDropdownOpen(false);
+    applyRouteState(nextState);
   };
   const loadTripDetail = async (id, options = {}) => {
     const r = await run(() => api(`/trips/${id}`));
@@ -199,7 +409,7 @@ function App() {
       navigateTo('tripDetail', { tripId: id, replace: options.replace });
     }
   };
-  const loadProfile = async () => { const r = await run(() => api('/auth/profile')); if (r?.data) { const u = { ...user, ...r.data, token }; setUser(u); localStorage.setItem('travelmate.web.user', JSON.stringify(u)); } };
+  const loadProfile = async () => { const r = await run(() => api('/auth/profile')); if (r?.data) { const u = { ...user, ...r.data, token }; setUser(u); safeLocalStorage.setItem('travelmate.web.user', JSON.stringify(u)); } };
   const loadNotifications = async () => {
     if (!token) return;
     try {
@@ -213,12 +423,7 @@ function App() {
   useEffect(() => { if (token) { loadTrips(); loadProfile(); loadNotifications(); } }, [token]);
   useEffect(() => {
     const syncFromBrowserRoute = () => {
-      const route = getRouteState();
-      setActiveTab(route.tab);
-      setRouteTripId(route.tripId);
-      setMobileMenuOpen(false);
-      setDropdownOpen(false);
-      setNotificationOpen(false);
+      applyRouteState(getRouteState());
     };
 
     window.history.replaceState(getRouteState(), '', `${window.location.pathname}${window.location.search}`);
@@ -229,6 +434,8 @@ function App() {
     const keepExternalLinksOutOfCurrentTab = (event) => {
       const anchor = event.target?.closest?.('a[href]');
       if (!anchor) return;
+
+      if (anchor.getAttribute('target') === '_blank') return;
 
       const href = anchor.getAttribute('href');
       if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
@@ -327,23 +534,25 @@ function App() {
         {loading && <div className="loading-bar" />}
 
         {/* Page Body */}
-        <div className="page-body">
+        <div className="page-body" key={routeRenderKey}>
           {message && <div className={`notice ${message.startsWith('✅') ? 'success' : 'error'}`}>{message}</div>}
 
-          {activeTab === 'home' && <HomePanel api={api} run={run} firstName={firstName} go={go} setPreview={setPreview} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
-          {activeTab === 'trips' && <TripsPanel trips={trips} loadTrips={loadTrips} loadTripDetail={loadTripDetail} go={go} />}
-          {activeTab === 'tools' && <ToolsPanel go={go} user={user} />}
-          {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={(t) => { setSelectedTrip(t); loadTrips(); go('tripDetail', { tripId: t._id || t.id }); }} />}
-          {activeTab === 'preview' && <PreviewPanel api={api} run={run} preview={preview} setPreview={setPreview} />}
-          {activeTab === 'places' && <PlacesPanel api={api} run={run} places={places} setPlaces={setPlaces} />}
-          {activeTab === 'expenses' && <ExpensesPanel api={api} run={run} trips={trips} expenses={expenses} setExpenses={setExpenses} />}
-          {activeTab === 'journals' && <JournalsPanel api={api} run={run} trips={trips} journals={journals} setJournals={setJournals} user={user} go={go} />}
-          {activeTab === 'community' && <CommunityPanel api={api} run={run} posts={posts} setPosts={setPosts} />}
-          {activeTab === 'weather' && <WeatherPanel api={api} run={run} weather={weather} setWeather={setWeather} />}
-          {activeTab === 'shared' && <SharedPanel api={api} run={run} sharedTrip={sharedTrip} setSharedTrip={setSharedTrip} />}
-          {activeTab === 'profile' && <ProfilePanel api={api} run={run} user={user} setUser={setUser} token={token} loadProfile={loadProfile} clearSession={clearSession} />}
-          {activeTab === 'admin' && <AdminPanel api={api} run={run} adminData={adminData} setAdminData={setAdminData} />}
-          {activeTab === 'tripDetail' && selectedTrip && <TripDetail api={api} run={run} trip={selectedTrip} setSelectedTrip={setSelectedTrip} loadTripDetail={loadTripDetail} go={go} />}
+          <ErrorBoundary>
+            {activeTab === 'home' && <HomePanel api={api} run={run} firstName={firstName} go={go} setPreview={setPreview} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
+            {activeTab === 'trips' && <TripsPanel trips={trips} loadTrips={loadTrips} loadTripDetail={loadTripDetail} go={go} loading={loading} />}
+            {activeTab === 'tools' && <ToolsPanel go={go} user={user} />}
+            {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={(t) => { setSelectedTrip(t); loadTrips(); go('tripDetail', { tripId: t._id || t.id }); }} />}
+            {activeTab === 'preview' && <PreviewPanel api={api} run={run} preview={preview} setPreview={setPreview} />}
+            {activeTab === 'places' && <PlacesPanel api={api} run={run} places={places} setPlaces={setPlaces} loading={loading} />}
+            {activeTab === 'expenses' && <ExpensesPanel api={api} run={run} trips={trips} expenses={expenses} setExpenses={setExpenses} loading={loading} />}
+            {activeTab === 'journals' && <JournalsPanel api={api} run={run} trips={trips} journals={journals} setJournals={setJournals} user={user} go={go} loading={loading} />}
+            {activeTab === 'community' && <CommunityPanel api={api} run={run} posts={posts} setPosts={setPosts} loading={loading} user={user} />}
+            {activeTab === 'weather' && <WeatherPanel api={api} run={run} weather={weather} setWeather={setWeather} loading={loading} />}
+            {activeTab === 'shared' && <SharedPanel api={api} run={run} sharedTrip={sharedTrip} setSharedTrip={setSharedTrip} />}
+            {activeTab === 'profile' && <ProfilePanel api={api} run={run} user={user} setUser={setUser} token={token} loadProfile={loadProfile} clearSession={clearSession} />}
+            {activeTab === 'admin' && <AdminPanel api={api} run={run} adminData={adminData} setAdminData={setAdminData} />}
+            {activeTab === 'tripDetail' && selectedTrip && <TripDetail api={api} run={run} trip={selectedTrip} setSelectedTrip={setSelectedTrip} loadTripDetail={loadTripDetail} go={go} />}
+          </ErrorBoundary>
         </div>
       </main>
     </div>
@@ -704,13 +913,15 @@ function HomePanel({ api, run, firstName, go, setPreview, posts, setPosts, trips
 /* ═══════════════════════════════════════════════════════════
    TRIPS
    ═══════════════════════════════════════════════════════════ */
-function TripsPanel({ trips, loadTrips, loadTripDetail, go }) {
+function TripsPanel({ trips, loadTrips, loadTripDetail, go, loading }) {
   return (
     <div className="animate-in">
       <div style={{ marginBottom: 20 }}>
         <button className="icon-text" onClick={loadTrips}><UiIcon icon={RotateCcw} />Tải lại</button>
       </div>
-      {trips.length === 0 ? (
+      {loading && trips.length === 0 ? (
+        <Skeleton type="list" rows={3} />
+      ) : trips.length === 0 ? (
         <div className="card card-pad"><div className="empty-state"><div className="empty-state-icon"><UiIcon icon={Map} size={36} /></div><div className="empty-state-title">Chưa có chuyến đi</div><div className="empty-state-text">Hãy tạo chuyến đi đầu tiên!</div></div></div>
       ) : (
         <div className="content-grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -985,12 +1196,34 @@ function TripDetail({ api, run, trip, setSelectedTrip, loadTripDetail, go }) {
       customItems,
       checkedItems
     };
-    await run(() => api(`/trips/${trip._id}/packing-list`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }), 'Đã lưu packing list.');
-    loadTripDetail(trip._id);
+
+    const originalTrip = trip;
+    // Optimistic UI Update
+    setSelectedTrip(prev => ({
+      ...prev,
+      packingList: {
+        ...(prev.packingList || {}),
+        customItems,
+        checkedItems
+      }
+    }));
+
+    try {
+      const res = await api(`/trips/${trip._id}/packing-list`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res?.data) {
+        setSelectedTrip(prev => ({
+          ...prev,
+          packingList: res.data
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to save packing list:', err);
+      setSelectedTrip(originalTrip);
+    }
   };
 
   const togglePackingItem = async (itemName) => {
@@ -1002,12 +1235,33 @@ function TripDetail({ api, run, trip, setSelectedTrip, loadTripDetail, go }) {
       customItems: customItems.map(it => ({ id: it.id || it._id, name: it.name })),
       checkedItems
     };
-    await run(() => api(`/trips/${trip._id}/packing-list`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }), 'Đã cập nhật danh sách.');
-    loadTripDetail(trip._id);
+
+    const originalTrip = trip;
+    // Optimistic UI Update
+    setSelectedTrip(prev => ({
+      ...prev,
+      packingList: {
+        ...(prev.packingList || {}),
+        checkedItems
+      }
+    }));
+
+    try {
+      const res = await api(`/trips/${trip._id}/packing-list`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res?.data) {
+        setSelectedTrip(prev => ({
+          ...prev,
+          packingList: res.data
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to update packing list item:', err);
+      setSelectedTrip(originalTrip);
+    }
   };
 
   const deleteTrip = async () => {
@@ -1549,7 +1803,7 @@ function TripEditor({ trip, api, run, onCancel, onSaved }) {
 /* ═══════════════════════════════════════════════════════════
    PLACES
    ═══════════════════════════════════════════════════════════ */
-function PlacesPanel({ api, run, places, setPlaces }) {
+function PlacesPanel({ api, run, places, setPlaces, loading }) {
   const [query, setQuery] = useState('Ngũ Hành Sơn');
   const [estimate, setEstimate] = useState(null);
   const [rf, setRf] = useState({ fromLat: '16.0678', fromLng: '108.2208', toLat: '16.0619', toLng: '108.2272', vehicle: 'motorcycle' });
@@ -1736,23 +1990,27 @@ function PlacesPanel({ api, run, places, setPlaces }) {
           </form>
         </div>
 
-        <ResultList
-          items={places}
-          empty="Chưa có địa điểm. Hãy tìm kiếm điểm đến của bạn."
-          render={(p) => (
-            <>
-              <div className="item-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><UiIcon icon={MapPinned} /></div>
-              <div style={{ flex: 1 }}>
-                <h3>{p.name}</h3>
-                <p>{p.address}</p>
-                <small>{p.category} · {p.ticketPrice || 'Miễn phí'}</small>
-              </div>
-              <button className="ghost icon-text" type="button" onClick={() => selectDestination(p)} style={{ alignSelf: 'center', fontSize: 12 }}>
-                <UiIcon icon={Navigation} />Chọn địa điểm
-              </button>
-            </>
-          )}
-        />
+        {loading && places.length === 0 ? (
+          <Skeleton type="list" rows={4} />
+        ) : (
+          <ResultList
+            items={places}
+            empty="Chưa có địa điểm. Hãy tìm kiếm điểm đến của bạn."
+            render={(p) => (
+              <>
+                <div className="item-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><UiIcon icon={MapPinned} /></div>
+                <div style={{ flex: 1 }}>
+                  <h3>{p.name}</h3>
+                  <p>{p.address}</p>
+                  <small>{p.category} · {p.ticketPrice || 'Miễn phí'}</small>
+                </div>
+                <button className="ghost icon-text" type="button" onClick={() => selectDestination(p)} style={{ alignSelf: 'center', fontSize: 12 }}>
+                  <UiIcon icon={Navigation} />Chọn địa điểm
+                </button>
+              </>
+            )}
+          />
+        )}
       </>}
 
       {selectedPlace && <div className="route-destination-card">
@@ -1802,7 +2060,7 @@ function PlacesPanel({ api, run, places, setPlaces }) {
 /* ═══════════════════════════════════════════════════════════
    EXPENSES
    ═══════════════════════════════════════════════════════════ */
-function ExpensesPanel({ api, run, trips, expenses, setExpenses }) {
+function ExpensesPanel({ api, run, trips, expenses, setExpenses, loading }) {
   const [tripId, setTripId] = useState('');
   const [form, setForm] = useState({ title: '', amount: '', category: 'FOOD', paidAt: today, note: '' });
   const [bill, setBill] = useState(null);
@@ -1846,17 +2104,25 @@ function ExpensesPanel({ api, run, trips, expenses, setExpenses }) {
             <TripSelect trips={trips} value={tripId} onChange={setTripId} />
             <button className="icon-text" onClick={load} style={{ width: '100%', marginTop: 12 }}><UiIcon icon={RotateCcw} />Tải chi phí</button>
           </div>
-          {expenses && (
-            <div className="stats-grid" style={{ marginTop: 20 }}>
-              <div className="stat-card"><div className="stat-label">Dự kiến</div><div className="stat-value" style={{ color: 'var(--primary)' }}>{money(expenses.summary?.plannedTotal)}</div></div>
-              <div className="stat-card"><div className="stat-label">Đã chi</div><div className="stat-value" style={{ color: 'var(--warning)' }}>{money(expenses.summary?.totalSpent)}</div></div>
-              <div className="stat-card"><div className="stat-label">Còn lại</div><div className="stat-value" style={{ color: 'var(--success)' }}>{money(expenses.summary?.remainingBudget)}</div></div>
+          {loading && !expenses && tripId ? (
+            <div style={{ marginTop: 20 }}>
+              <Skeleton type="list" rows={3} />
             </div>
+          ) : (
+            <>
+              {expenses && (
+                <div className="stats-grid" style={{ marginTop: 20 }}>
+                  <div className="stat-card"><div className="stat-label">Dự kiến</div><div className="stat-value" style={{ color: 'var(--primary)' }}>{money(expenses.summary?.plannedTotal)}</div></div>
+                  <div className="stat-card"><div className="stat-label">Đã chi</div><div className="stat-value" style={{ color: 'var(--warning)' }}>{money(expenses.summary?.totalSpent)}</div></div>
+                  <div className="stat-card"><div className="stat-label">Còn lại</div><div className="stat-value" style={{ color: 'var(--success)' }}>{money(expenses.summary?.remainingBudget)}</div></div>
+                </div>
+              )}
+              <div style={{ marginTop: 20 }}>
+                <ResultList title="Khoản chi đã nhập" items={expenses?.data || []} empty="Chưa có chi phí." render={(x) => (<><div className="item-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><UiIcon icon={Receipt} /></div><div style={{ flex: 1 }}><h3>{x.title}</h3><p>{x.categoryLabel || x.category} · {dateText(x.paidAt)}</p><small style={{ color: 'var(--primary)', fontWeight: 700 }}>{money(x.amount)}</small>{x.billImageUrl && <a href={x.billImageUrl} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 4 }}>Xem bill</a>}</div><div className="button-column"><button className="icon-only" title="Sửa" onClick={() => edit(x)}><UiIcon icon={Pencil} size={16} /></button><button className="danger icon-only" title="Xóa" onClick={() => remove(x)}><UiIcon icon={Trash2} size={16} /></button></div></>)} />
+                <ResultList title="Chi phí dự kiến" items={expenses?.plannedExpenses || []} empty="Chưa có chi phí dự kiến từ lịch trình." render={(x) => (<><div className="item-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><UiIcon icon={CalendarDays} /></div><div><h3>{x.title}</h3><p>{x.categoryLabel || x.category} · {x.note}</p><small style={{ color: 'var(--primary)', fontWeight: 700 }}>{money(x.amount)}</small></div></>)} />
+              </div>
+            </>
           )}
-          <div style={{ marginTop: 20 }}>
-            <ResultList title="Khoản chi đã nhập" items={expenses?.data || []} empty="Chưa có chi phí." render={(x) => (<><div className="item-icon" style={{ background: 'rgba(16,185,129,0.1)' }}><UiIcon icon={Receipt} /></div><div style={{ flex: 1 }}><h3>{x.title}</h3><p>{x.categoryLabel || x.category} · {dateText(x.paidAt)}</p><small style={{ color: 'var(--primary)', fontWeight: 700 }}>{money(x.amount)}</small>{x.billImageUrl && <a href={x.billImageUrl} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 4 }}>Xem bill</a>}</div><div className="button-column"><button className="icon-only" title="Sửa" onClick={() => edit(x)}><UiIcon icon={Pencil} size={16} /></button><button className="danger icon-only" title="Xóa" onClick={() => remove(x)}><UiIcon icon={Trash2} size={16} /></button></div></>)} />
-            <ResultList title="Chi phí dự kiến" items={expenses?.plannedExpenses || []} empty="Chưa có chi phí dự kiến từ lịch trình." render={(x) => (<><div className="item-icon" style={{ background: 'rgba(59,130,246,0.1)' }}><UiIcon icon={CalendarDays} /></div><div><h3>{x.title}</h3><p>{x.categoryLabel || x.category} · {x.note}</p><small style={{ color: 'var(--primary)', fontWeight: 700 }}>{money(x.amount)}</small></div></>)} />
-          </div>
         </div>
         <div>
           <div className="card card-pad">
@@ -1881,7 +2147,7 @@ function ExpensesPanel({ api, run, trips, expenses, setExpenses }) {
 /* ═══════════════════════════════════════════════════════════
    JOURNALS
    ═══════════════════════════════════════════════════════════ */
-function JournalsPanel({ api, run, trips, journals, setJournals, user, go }) {
+function JournalsPanel({ api, run, trips, journals, setJournals, user, go, loading }) {
   const [tripId, setTripId] = useState('');
   const [form, setForm] = useState({ title: '', content: '', emotion: '😊', journalDate: today });
   const [images, setImages] = useState([]);
@@ -1924,7 +2190,11 @@ function JournalsPanel({ api, run, trips, journals, setJournals, user, go }) {
         <div>
           <div className="card card-pad"><TripSelect trips={trips} value={tripId} onChange={setTripId} /><button className="icon-text" onClick={load} style={{ width: '100%', marginTop: 12 }}><UiIcon icon={RotateCcw} />Tải nhật ký</button></div>
           <div style={{ marginTop: 20 }}>
-            <ResultList items={journals} empty="Chưa có nhật ký hoặc tài khoản chưa là Premium." render={(j) => (<><div className="item-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><UiIcon icon={BookOpen} /></div><div style={{ flex: 1 }}><h3>{j.title}</h3><p>{j.content}</p><small>{j.emotion || '😊'} · {dateText(j.journalDate || j.createdAt)}</small>{(j.imageUrls || []).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 4 }}>Xem ảnh</a>)}</div><div className="button-column"><button className="icon-only" title="Sửa" onClick={() => edit(j)}><UiIcon icon={Pencil} size={16} /></button><button className="danger icon-only" title="Xóa" onClick={() => remove(j)}><UiIcon icon={Trash2} size={16} /></button></div></>)} />
+            {loading && journals.length === 0 && tripId ? (
+              <Skeleton type="list" rows={3} />
+            ) : (
+              <ResultList items={journals} empty="Chưa có nhật ký hoặc tài khoản chưa là Premium." render={(j) => (<><div className="item-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><UiIcon icon={BookOpen} /></div><div style={{ flex: 1 }}><h3>{j.title}</h3><p>{j.content}</p><small>{j.emotion || '😊'} · {dateText(j.journalDate || j.createdAt)}</small>{(j.imageUrls || []).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 4 }}>Xem ảnh</a>)}</div><div className="button-column"><button className="icon-only" title="Sửa" onClick={() => edit(j)}><UiIcon icon={Pencil} size={16} /></button><button className="danger icon-only" title="Xóa" onClick={() => remove(j)}><UiIcon icon={Trash2} size={16} /></button></div></>)} />
+            )}
           </div>
         </div>
         <div className="card card-pad">
@@ -1948,9 +2218,10 @@ function JournalsPanel({ api, run, trips, journals, setJournals, user, go }) {
 /* ═══════════════════════════════════════════════════════════
    COMMUNITY
    ═══════════════════════════════════════════════════════════ */
-function CommunityPanel({ api, run, posts, setPosts }) {
+function CommunityPanel({ api, run, posts, setPosts, loading, user }) {
   const [form, setForm] = useState({ title: '', content: '', category: 'Mới nhất' });
   const [image, setImage] = useState(null);
+  const [localLikedPosts, setLocalLikedPosts] = useState(() => new Set());
   const loadPosts = async () => { const r = await run(() => api('/posts')); if (r?.data) setPosts(Array.isArray(r.data) ? r.data : r.data.posts || []); };
   const createPost = async (e) => {
     e.preventDefault();
@@ -1963,8 +2234,71 @@ function CommunityPanel({ api, run, posts, setPosts }) {
     }
   };
   const quickAction = async (path, ok, body) => {
-    const r = await run(() => api(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }), ok);
-    if (r) loadPosts();
+    const likeMatch = path.match(/\/posts\/([^/]+)\/like$/);
+    const commentMatch = path.match(/\/posts\/([^/]+)\/comments$/);
+    const previousPosts = posts;
+
+    if (likeMatch) {
+      const postId = likeMatch[1];
+      setPosts((prevPosts) =>
+        prevPosts.map((p) => {
+          if (p._id === postId) {
+            const isLiked = localLikedPosts.has(postId);
+            const newLiked = new Set(localLikedPosts);
+            if (isLiked) {
+              newLiked.delete(postId);
+              setLocalLikedPosts(newLiked);
+              return { ...p, likesCount: Math.max(0, (p.likesCount || 0) - 1) };
+            } else {
+              newLiked.add(postId);
+              setLocalLikedPosts(newLiked);
+              return { ...p, likesCount: (p.likesCount || 0) + 1 };
+            }
+          }
+          return p;
+        })
+      );
+    } else if (commentMatch && body && body.content) {
+      const postId = commentMatch[1];
+      setPosts((prevPosts) =>
+        prevPosts.map((p) => {
+          if (p._id === postId) {
+            const newComment = {
+              _id: Date.now().toString(),
+              author: { name: user?.name || 'Bạn' },
+              content: body.content,
+              createdAt: new Date().toISOString(),
+            };
+            return {
+              ...p,
+              commentsCount: (p.commentsCount || 0) + 1,
+              comments: [...(p.comments || []), newComment],
+            };
+          }
+          return p;
+        })
+      );
+    }
+
+    try {
+      const r = await api(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (r?.data) {
+        if (r.data.post) {
+          setPosts((prev) => prev.map((p) => (p._id === r.data.post._id ? r.data.post : p)));
+        } else {
+          loadPosts();
+        }
+      } else {
+        loadPosts();
+      }
+    } catch (err) {
+      console.error('Optimistic action failed, rolling back:', err);
+      setPosts(previousPosts);
+    }
   };
 
   return (
@@ -1975,7 +2309,11 @@ function CommunityPanel({ api, run, posts, setPosts }) {
       </div>
       <div className="community-layout">
         <main className="community-feed">
-          <PostList posts={posts} quickAction={quickAction} />
+          {loading && posts.length === 0 ? (
+            <Skeleton type="list" rows={3} />
+          ) : (
+            <PostList posts={posts} quickAction={quickAction} />
+          )}
         </main>
         <aside className="card card-pad community-compose">
           <h3 className="icon-text" style={{ marginBottom: 16 }}><UiIcon icon={FileText} />Đăng bài mới</h3>
@@ -1995,7 +2333,7 @@ function CommunityPanel({ api, run, posts, setPosts }) {
 /* ═══════════════════════════════════════════════════════════
    WEATHER
    ═══════════════════════════════════════════════════════════ */
-function WeatherPanel({ api, run, weather, setWeather }) {
+function WeatherPanel({ api, run, weather, setWeather, loading }) {
   const [form, setForm] = useState({ destination: 'Đà Nẵng', days: 3 });
   const submit = async (e) => { e.preventDefault(); const r = await run(() => api(`/weather?${new URLSearchParams(form)}`), 'Đã tải thời tiết.'); if (r?.data) setWeather(r.data); };
   return (
@@ -2008,36 +2346,40 @@ function WeatherPanel({ api, run, weather, setWeather }) {
         </form>
       </div>
       
-      {weather && weather.forecast && (
-        <div className="weather-forecast-grid animate-in">
-          {weather.forecast.map((w, idx) => (
-            <div className="weather-day-card" key={idx}>
-              <div className="weather-day-header">
-                <span className="weather-day-title">{dateText(w.date)} (Ngày {w.day})</span>
-                <span className="weather-day-icon">
-                  <WeatherIcon type={w.icon} />
-                </span>
-              </div>
-              <div className="weather-day-temp">{w.temp}</div>
-              <div className="weather-day-desc">{w.statusLabel}</div>
-              <div className="weather-day-meta">
-                <span className="icon-text"><UiIcon icon={Umbrella} size={15} />Mưa: {w.rainProbability || '0%'}</span>
-                <span className="icon-text"><UiIcon icon={Navigation} size={15} />Gió: {w.windSpeed || '0 km/h'}</span>
-              </div>
-              {w.recommendations && w.recommendations.length > 0 && (
-                <div>
-                  <div className="weather-recs-title icon-text"><UiIcon icon={Sparkles} size={16} />Điểm vui chơi phù hợp:</div>
-                  {w.recommendations.map((rec, rIdx) => (
-                    <div className="weather-rec-item" key={rIdx}>
-                      <span><UiIcon icon={rec.category === 'FOOD' ? Compass : MapPinned} size={16} /></span>
-                      <span>{rec.name}</span>
-                    </div>
-                  ))}
+      {loading && !weather ? (
+        <Skeleton type="card" rows={form.days || 3} />
+      ) : (
+        weather && weather.forecast && (
+          <div className="weather-forecast-grid animate-in">
+            {weather.forecast.map((w, idx) => (
+              <div className="weather-day-card" key={idx}>
+                <div className="weather-day-header">
+                  <span className="weather-day-title">{dateText(w.date)} (Ngày {w.day})</span>
+                  <span className="weather-day-icon">
+                    <WeatherIcon type={w.icon} />
+                  </span>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+                <div className="weather-day-temp">{w.temp}</div>
+                <div className="weather-day-desc">{w.statusLabel}</div>
+                <div className="weather-day-meta">
+                  <span className="icon-text"><UiIcon icon={Umbrella} size={15} />Mưa: {w.rainProbability || '0%'}</span>
+                  <span className="icon-text"><UiIcon icon={Navigation} size={15} />Gió: {w.windSpeed || '0 km/h'}</span>
+                </div>
+                {w.recommendations && w.recommendations.length > 0 && (
+                  <div>
+                    <div className="weather-recs-title icon-text"><UiIcon icon={Sparkles} size={16} />Điểm vui chơi phù hợp:</div>
+                    {w.recommendations.map((rec, rIdx) => (
+                      <div className="weather-rec-item" key={rIdx}>
+                        <span><UiIcon icon={rec.category === 'FOOD' ? Compass : MapPinned} size={16} /></span>
+                        <span>{rec.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
@@ -2067,28 +2409,31 @@ function SharedPanel({ api, run, sharedTrip, setSharedTrip }) {
    ═══════════════════════════════════════════════════════════ */
 function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSession }) {
   const paymentOrderStorageKey = 'travelmate.web.payosOrderCode';
-  const [lastOrderCode, setLastOrderCode] = useState(() => localStorage.getItem(paymentOrderStorageKey) || '');
+  const [lastOrderCode, setLastOrderCode] = useState(() => safeLocalStorage.getItem(paymentOrderStorageKey) || '');
   const [checkingPayment, setCheckingPayment] = useState(false);
+  const [generatingPayment, setGeneratingPayment] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [payosCheckoutUrl, setPayosCheckoutUrl] = useState('');
 
   const startPayosPremium = async () => {
-    // Open immediately from the click event so browsers do not block the PayOS tab as a popup.
-    const checkoutWindow = window.open('', '_blank');
-    const r = await run(() => api('/payments/payos/premium', { method: 'POST' }), 'Da tao link thanh toan PayOS.');
+    setGeneratingPayment(true);
+    setPayosCheckoutUrl('');
+    const r = await run(() => api('/payments/payos/premium', { method: 'POST' }), 'Đã tạo link thanh toán PayOS.');
     if (r?.data?.checkoutUrl) {
       const orderCode = String(r.data.orderCode);
       setLastOrderCode(orderCode);
-      localStorage.setItem(paymentOrderStorageKey, orderCode);
+      safeLocalStorage.setItem(paymentOrderStorageKey, orderCode);
       setPayosCheckoutUrl(r.data.checkoutUrl);
-      if (checkoutWindow) {
-        checkoutWindow.location.assign(r.data.checkoutUrl);
-      } else {
-        alert('Trình duyệt đã chặn tab PayOS. Bấm "Mở lại PayOS" để thanh toán.');
+      try {
+        const opened = window.open(r.data.checkoutUrl, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+          console.warn('Popup blocked, user will click the link manually.');
+        }
+      } catch (err) {
+        console.warn('Auto window.open failed:', err);
       }
-    } else if (checkoutWindow) {
-      checkoutWindow.close();
     }
+    setGeneratingPayment(false);
   };
 
   const checkPremiumPayment = async ({ silent = false } = {}) => {
@@ -2107,8 +2452,8 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
           token,
         };
         setUser(u);
-        localStorage.setItem('travelmate.web.user', JSON.stringify(u));
-        localStorage.removeItem(paymentOrderStorageKey);
+        safeLocalStorage.setItem('travelmate.web.user', JSON.stringify(u));
+        safeLocalStorage.removeItem(paymentOrderStorageKey);
         setLastOrderCode('');
         setPayosCheckoutUrl('');
       }
@@ -2198,8 +2543,26 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
             </div>
             <div className="premium-modal-price"><strong>10.000 đ</strong><span>/ 30 ngày</span></div>
             <div className="premium-modal-actions">
-              <button onClick={() => setShowPremiumModal(false)}>Để sau</button>
-              <button className="primary icon-text" onClick={() => { setShowPremiumModal(false); startPayosPremium(); }}><UiIcon icon={WalletCards} />Tiếp tục thanh toán</button>
+              {generatingPayment ? (
+                <div style={{ textAlign: 'center', width: '100%', padding: '10px 0' }}>
+                  <p style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Đang tạo liên kết thanh toán PayOS...</p>
+                </div>
+              ) : payosCheckoutUrl ? (
+                <div style={{ display: 'grid', gap: 10, width: '100%' }}>
+                  <div className="notice success" style={{ fontSize: 13, padding: '8px 12px', margin: '0 0 10px 0' }}>
+                    🎉 Liên kết thanh toán đã sẵn sàng!
+                  </div>
+                  <a className="primary icon-text" href={payosCheckoutUrl} target="_blank" rel="noreferrer" onClick={() => setShowPremiumModal(false)} style={{ display: 'flex', justifyContent: 'center', textDecoration: 'none', padding: '10px 16px', borderRadius: 8, fontWeight: 'bold' }}>
+                    <UiIcon icon={WalletCards} /> Thanh toán qua PayOS
+                  </a>
+                  <button onClick={() => setShowPremiumModal(false)}>Để sau</button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => setShowPremiumModal(false)}>Để sau</button>
+                  <button className="primary icon-text" onClick={startPayosPremium}><UiIcon icon={WalletCards} />Tiếp tục thanh toán</button>
+                </>
+              )}
             </div>
           </section>
         </div>
@@ -2519,4 +2882,8 @@ function TripReadOnly({ trip }) {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(
+  <GlobalErrorBoundary>
+    <App />
+  </GlobalErrorBoundary>
+);
