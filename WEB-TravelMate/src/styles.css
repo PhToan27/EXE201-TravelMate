@@ -992,6 +992,84 @@ select {
   letter-spacing: -0.02em;
 }
 
+.admin-stats-panel h3 { margin-bottom: 18px; }
+.admin-stats-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.admin-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.admin-stat-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  color: var(--primary);
+  background: var(--primary-50);
+  flex-shrink: 0;
+}
+.admin-stats-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.85fr) minmax(320px, 1.15fr);
+  gap: 18px;
+}
+.admin-stats-section {
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: var(--gray-50);
+}
+.admin-stats-section h4 {
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gray-900);
+}
+.admin-growth-list,
+.admin-pending-list {
+  display: grid;
+  gap: 10px;
+}
+.admin-growth-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+}
+.admin-growth-item span { color: var(--gray-500); font-size: 13px; font-weight: 700; }
+.admin-growth-item strong { color: var(--primary); font-size: 18px; }
+.admin-pending-item {
+  padding: 12px;
+  border: 1px solid var(--gray-100);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+}
+.admin-pending-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.admin-pending-head strong { color: var(--gray-900); line-height: 1.35; }
+.admin-pending-head .status-pill { margin: 0; white-space: nowrap; }
+.admin-pending-item p {
+  margin-bottom: 8px;
+  color: var(--gray-500);
+  font-size: 13px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.admin-pending-item small { color: var(--gray-400); font-weight: 600; }
+
 /* ── Content Grid ───────────────────────────────────────── */
 .content-grid {
   display: grid;
@@ -1976,6 +2054,7 @@ pre {
   .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
   .content-grid { grid-template-columns: 1fr; }
   .content-grid-3 { grid-template-columns: 1fr 1fr; }
+  .admin-stats-detail-grid { grid-template-columns: 1fr; }
   .featured-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 768px) {

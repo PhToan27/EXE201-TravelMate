@@ -2574,6 +2574,90 @@ function ProfilePanel({ api, run, user, setUser, token, loadProfile, clearSessio
 /* ═══════════════════════════════════════════════════════════
    ADMIN
    ═══════════════════════════════════════════════════════════ */
+const adminStatCards = [
+  { key: 'totalUsers', label: 'Tổng người dùng', icon: UsersRound },
+  { key: 'premiumUsers', label: 'Người dùng Premium', icon: ShieldCheck },
+  { key: 'newTrips', label: 'Chuyến đi mới', icon: Plane },
+  { key: 'urgentReports', label: 'Báo cáo cần xử lý', icon: Flag },
+  { key: 'pendingCount', label: 'Bài chờ duyệt', icon: FileText },
+  { key: 'approvedCount', label: 'Bài đã duyệt', icon: Check },
+  { key: 'reportedCount', label: 'Bài bị báo cáo', icon: Flag },
+];
+
+function adminPostStatusText(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'approved') return 'Đã duyệt';
+  if (normalized === 'rejected') return 'Từ chối';
+  if (normalized === 'needs_review' || normalized === 'pending') return 'Chờ duyệt';
+  return status || 'Chưa rõ';
+}
+
+function AdminStatsOverview({ data }) {
+  const growth = Array.isArray(data?.userGrowth) ? data.userGrowth : [];
+  const recentPending = Array.isArray(data?.recentPending) ? data.recentPending : [];
+
+  return (
+    <div className="admin-stats-panel">
+      <h3 className="icon-text"><UiIcon icon={ChartNoAxesCombined} />Thống kê quản trị</h3>
+      <div className="stats-grid admin-stats-grid">
+        {adminStatCards.map(({ key, label, icon: Icon }) => (
+          <div className="stat-card admin-stat-card" key={key}>
+            <div className="admin-stat-icon"><UiIcon icon={Icon} /></div>
+            <div>
+              <div className="stat-label">{label}</div>
+              <div className="stat-value">{data?.[key] ?? 0}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="admin-stats-detail-grid">
+        <section className="admin-stats-section">
+          <h4>Tăng trưởng người dùng</h4>
+          {growth.length ? (
+            <div className="admin-growth-list">
+              {growth.map((item, index) => (
+                <div className="admin-growth-item" key={`${item.label || 'growth'}-${index}`}>
+                  <span>{item.label || `Mốc ${index + 1}`}</span>
+                  <strong>{item.value ?? 0}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">Chưa có dữ liệu tăng trưởng.</p>
+          )}
+        </section>
+
+        <section className="admin-stats-section">
+          <h4>Bài chờ duyệt gần đây</h4>
+          {recentPending.length ? (
+            <div className="admin-pending-list">
+              {recentPending.map((post, index) => (
+                <article className="admin-pending-item" key={post._id || `${post.title || 'post'}-${index}`}>
+                  <div className="admin-pending-head">
+                    <strong>{post.title || 'Bài viết chưa có tiêu đề'}</strong>
+                    <span className={`status-pill ${post.status === 'rejected' ? 'status-pill-danger' : ''}`}>
+                      {adminPostStatusText(post.status)}
+                    </span>
+                  </div>
+                  <p>{post.excerpt || post.content || 'Chưa có nội dung tóm tắt.'}</p>
+                  <small>
+                    {post.author?.name || 'Ẩn danh'}
+                    {post.author?.email ? ` · ${post.author.email}` : ''}
+                    {post.createdAt ? ` · ${dateText(post.createdAt)}` : ''}
+                  </small>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">Không có bài viết chờ duyệt gần đây.</p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function AdminPanel({ api, run, adminData, setAdminData }) {
   const [users, setUsers] = useState([]);
   const [posts, setPosts] = useState([]);
@@ -2591,11 +2675,11 @@ function AdminPanel({ api, run, adminData, setAdminData }) {
   return (
     <div className="animate-in">
       <div className="button-row" style={{ marginBottom: 24 }}>
-        <button className="icon-text" onClick={loadStats}><UiIcon icon={ChartNoAxesCombined} />Stats</button>
-        <button className="icon-text" onClick={loadUsers}><UiIcon icon={UsersRound} />Users</button>
-        <button className="icon-text" onClick={loadPosts}><UiIcon icon={FileText} />Posts pending</button>
+        <button className="icon-text" onClick={loadStats}><UiIcon icon={ChartNoAxesCombined} />Thống kê</button>
+        <button className="icon-text" onClick={loadUsers}><UiIcon icon={UsersRound} />Người dùng</button>
+        <button className="icon-text" onClick={loadPosts}><UiIcon icon={FileText} />Bài chờ duyệt</button>
       </div>
-      {adminData && <div className="card card-pad" style={{ marginBottom: 24 }}><InfoBox title="Admin Stats" icon={ChartNoAxesCombined} data={adminData} /></div>}
+      {adminData && <div className="card card-pad" style={{ marginBottom: 24 }}><AdminStatsOverview data={adminData} /></div>}
       <div className="content-grid">
         <div>
           <ResultList title="Users" items={users} render={(u) => (<><div className="item-icon" style={{ background: 'rgba(139,92,246,0.1)' }}><UiIcon icon={CircleUserRound} /></div><div style={{ flex: 1 }}><h3>{u.name || u.email}</h3><p>{u.email}</p><small>{u.role} · {u.package} · {u.status}</small></div><div className="button-column"><button onClick={() => updateUser(u, 'package', u.package === 'premium' ? 'free' : 'premium')}>{u.package === 'premium' ? 'Hạ Premium' : 'Nâng Premium'}</button><button onClick={() => updateUser(u, 'status', u.status === 'suspended' ? 'active' : 'suspended')}>{u.status === 'suspended' ? 'Mở khóa' : 'Khóa'}</button><button onClick={() => updateUser(u, 'role', u.role === 'moderator' ? 'user' : 'moderator')}>{u.role === 'moderator' ? 'Gỡ moderator' : 'Đặt moderator'}</button></div></>)} />
