@@ -216,37 +216,18 @@ function Skeleton({ type = 'text', rows = 3, className = '' }) {
 const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'https://exe201-travelmate-1.onrender.com/api';
 const LEGACY_API_BASE_URL = 'https://exe201-travelmate.onrender.com/api';
-const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || '';
-const GA_SCRIPT_ID = 'travelmate-ga4-script';
+const GA_MEASUREMENT_ID = 'G-1N8WWBVXEL';
 
-let analyticsInitialized = false;
-let lastTrackedPage = '';
-
-const initAnalytics = () => {
-  if (!GA_MEASUREMENT_ID || analyticsInitialized || typeof window === 'undefined' || typeof document === 'undefined') return;
-
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || ((...args) => window.dataLayer.push(args));
-
-  if (!document.getElementById(GA_SCRIPT_ID)) {
-    const script = document.createElement('script');
-    script.id = GA_SCRIPT_ID;
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_MEASUREMENT_ID)}`;
-    document.head.appendChild(script);
-  }
-
-  window.gtag('js', new Date());
-  window.gtag('config', GA_MEASUREMENT_ID, { send_page_view: false });
-  analyticsInitialized = true;
-};
+let lastTrackedPage =
+  typeof window === 'undefined'
+    ? ''
+    : `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
 const trackPageView = (pagePath) => {
-  if (!GA_MEASUREMENT_ID || typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (typeof window === 'undefined' || typeof document === 'undefined' || typeof window.gtag !== 'function') return;
   if (pagePath === lastTrackedPage) return;
 
-  initAnalytics();
-  window.gtag?.('config', GA_MEASUREMENT_ID, {
+  window.gtag('config', GA_MEASUREMENT_ID, {
     page_path: pagePath,
     page_location: window.location.href,
     page_title: document.title,
