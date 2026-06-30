@@ -571,7 +571,7 @@ select {
   box-shadow: 0 6px 20px rgba(249,115,22,0.45);
 }
 
-/* ── Home itinerary preview planner ─────────────────────── */
+/* Home create trip planner */
 .web-hero:has(.home-planner-form) { margin-bottom: 180px; }
 .glass-search-container:has(.home-planner-form) {
   max-width: 1120px;
