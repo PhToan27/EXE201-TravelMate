@@ -488,10 +488,15 @@ function App() {
 
   const firstName = user?.name?.split(' ').pop() || 'bạn';
 
-  const tabTitles = { home: 'Trang chủ', trips: 'Chuyến đi', tools: 'Công cụ', create: 'Tạo chuyến đi', preview: 'Preview AI', places: 'Địa điểm', expenses: 'Chi phí', journals: 'Nhật ký', community: 'Cộng đồng', weather: 'Thời tiết', shared: 'Chia sẻ', profile: 'Hồ sơ', admin: 'Admin', tripDetail: 'Chi tiết chuyến đi' };
-  const tabSubtitles = { home: `Xin chào, ${firstName}!`, trips: `${trips.length} chuyến đi`, tools: 'Tạo lịch trình, quản lý chi phí và tra cứu tiện ích', create: 'Lên kế hoạch với AI', preview: 'Xem trước lịch trình', places: 'Tìm kiếm & dẫn đường', expenses: 'Quản lý ngân sách', journals: 'Ghi lại khoảnh khắc', community: 'Chia sẻ trải nghiệm', weather: 'Dự báo điểm đến', shared: 'Mở bằng mã chia sẻ', profile: 'Thông tin cá nhân', admin: 'Quản lý hệ thống', tripDetail: selectedTrip?.destination || '' };
+  const tabTitles = { home: 'Trang chủ', trips: 'Chuyến đi', tools: 'Công cụ', create: 'Tạo chuyến đi', preview: 'Gợi ý lịch trình', places: 'Địa điểm', expenses: 'Chi phí', journals: 'Nhật ký', community: 'Cộng đồng', weather: 'Thời tiết', shared: 'Chia sẻ', profile: 'Hồ sơ', admin: 'Admin', tripDetail: 'Chi tiết chuyến đi' };
+  const tabSubtitles = { home: `Xin chào, ${firstName}!`, trips: `${trips.length} chuyến đi`, tools: 'Gợi ý lịch trình, quản lý chi phí và tra cứu tiện ích', create: 'Lên kế hoạch với AI', preview: 'Xem trước lịch trình AI', places: 'Tìm kiếm & dẫn đường', expenses: 'Quản lý ngân sách', journals: 'Ghi lại khoảnh khắc', community: 'Chia sẻ trải nghiệm', weather: 'Dự báo điểm đến', shared: 'Mở bằng mã chia sẻ', profile: 'Thông tin cá nhân', admin: 'Quản lý hệ thống', tripDetail: selectedTrip?.destination || '' };
 
   const go = (tab, options = {}) => navigateTo(tab, options);
+  const handleTripCreated = (trip) => {
+    setSelectedTrip(trip);
+    loadTrips();
+    go('tripDetail', { tripId: trip._id || trip.id });
+  };
   const unreadNotifications = notifications.filter((notification) => !notification.readAt && !notification.isRead).length;
 
   return (
@@ -517,8 +522,7 @@ function App() {
             <div className={`nav-dropdown ${dropdownOpen ? 'clicked' : ''}`} onMouseLeave={() => setDropdownOpen(false)}>
               <button className={`nav-link dropdown-toggle ${['tools', 'create', 'preview', 'expenses', 'journals', 'weather', 'shared', 'admin'].includes(activeTab) ? 'active' : ''}`} onClick={() => { go('tools'); setDropdownOpen(!dropdownOpen); }} style={{ cursor: 'pointer' }}>Công cụ <UiIcon icon={ChevronDown} size={15} /></button>
               <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`}>
-                <button onClick={() => { go('create'); setDropdownOpen(false); }}><UiIcon icon={Plane} />Tạo chuyến đi</button>
-                <button onClick={() => { go('preview'); setDropdownOpen(false); }}><UiIcon icon={Sparkles} />Preview AI</button>
+                <button onClick={() => { go('preview'); setDropdownOpen(false); }}><UiIcon icon={Sparkles} />Gợi ý lịch trình</button>
                 <button onClick={() => { go('expenses'); setDropdownOpen(false); }}><UiIcon icon={WalletCards} />Chi phí</button>
                 <button onClick={() => { go('journals'); setDropdownOpen(false); }}><UiIcon icon={BookOpen} />Nhật ký</button>
                 <button onClick={() => { go('weather'); setDropdownOpen(false); }}><UiIcon icon={CloudSun} />Thời tiết</button>
@@ -559,10 +563,10 @@ function App() {
           {message && <div className={`notice ${message.startsWith('✅') ? 'success' : 'error'}`}>{message}</div>}
 
           <ErrorBoundary>
-            {activeTab === 'home' && <HomePanel api={api} run={run} firstName={firstName} go={go} setPreview={setPreview} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
+            {activeTab === 'home' && <HomePanel api={api} run={run} firstName={firstName} go={go} onCreated={handleTripCreated} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
             {activeTab === 'trips' && <TripsPanel trips={trips} loadTrips={loadTrips} loadTripDetail={loadTripDetail} go={go} loading={loading} />}
             {activeTab === 'tools' && <ToolsPanel go={go} user={user} />}
-            {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={(t) => { setSelectedTrip(t); loadTrips(); go('tripDetail', { tripId: t._id || t.id }); }} />}
+            {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={handleTripCreated} />}
             {activeTab === 'preview' && <PreviewPanel api={api} run={run} preview={preview} setPreview={setPreview} />}
             {activeTab === 'places' && <PlacesPanel api={api} run={run} places={places} setPlaces={setPlaces} loading={loading} />}
             {activeTab === 'expenses' && <ExpensesPanel api={api} run={run} trips={trips} expenses={expenses} setExpenses={setExpenses} loading={loading} />}
@@ -582,7 +586,6 @@ function App() {
 
 function ToolsPanel({ go, user }) {
   const tools = [
-    { tab: 'create', title: 'Tạo chuyến đi', desc: 'Lập kế hoạch mới từ điểm đến, ngày đi, ngân sách và sở thích.', icon: Plane },
     { tab: 'preview', title: 'Gợi ý lịch trình', desc: 'Xem trước lịch trình AI trước khi lưu thành chuyến đi.', icon: Sparkles },
     { tab: 'expenses', title: 'Chi phí', desc: 'Theo dõi ngân sách, khoản chi và bill đã nhập.', icon: WalletCards },
     { tab: 'journals', title: 'Nhật ký', desc: 'Lưu ảnh và câu chuyện trong chuyến đi dành cho Premium.', icon: BookOpen },
@@ -683,19 +686,32 @@ function AuthPanel({ api, run, saveSession }) {
 /* ═══════════════════════════════════════════════════════════
    HOME
    ═══════════════════════════════════════════════════════════ */
-function HomePanel({ api, run, firstName, go, setPreview, posts, setPosts, trips, loadTripDetail }) {
+function HomePanel({ api, run, firstName, go, onCreated, posts, setPosts, trips, loadTripDetail }) {
   const [plan, setPlan] = useState({
     destination: 'Ngũ Hành Sơn', startDate: today, endDate: tomorrow, people: 2,
     budget: 3000000, interests: ['Ăn uống'],
   });
 
-  const createPreview = async (e) => {
+  const createTrip = async (e) => {
     e.preventDefault();
-    const r = await run(() => api('/itinerary-preview', {
+    const selectedInterests = plan.interests.join(', ');
+    const people = Math.max(Number(plan.people) || 1, 1);
+    const r = await run(() => api('/trips', {
       method: 'POST',
-      body: JSON.stringify(plan),
-    }), 'Đã tạo bản xem trước lịch trình.');
-    if (r?.data) { setPreview(r.data); go('preview'); }
+      body: JSON.stringify({
+        destination: plan.destination.trim(),
+        startDate: plan.startDate,
+        endDate: plan.endDate,
+        people,
+        budget: Math.max(Number(plan.budget) || 0, 0),
+        travelStyle: selectedInterests || 'CHILL',
+        interests: selectedInterests,
+        hotelArea: 'Trung tâm',
+        tripType: people === 1 ? 'Solo' : people === 2 ? 'Couple' : 'Friends',
+        generateAiItinerary: true,
+      }),
+    }), 'Đã tạo chuyến đi.');
+    if (r?.data) onCreated?.(r.data);
   };
 
   const toggleInterest = (interest) => {
@@ -723,12 +739,12 @@ function HomePanel({ api, run, firstName, go, setPreview, posts, setPosts, trips
         <div className="web-hero-overlay" />
         <div className="web-hero-content">
           <h1>Xin chào, {firstName}</h1>
-          <p>Khám phá các địa điểm tuyệt vời, tạo lịch trình AI và quản lý chi phí chuyến đi của bạn</p>
+          <p>Khám phá các địa điểm tuyệt vời, tạo chuyến đi bằng AI và quản lý chi phí chuyến đi của bạn</p>
         </div>
 
-        {/* Itinerary preview form */}
+        {/* Create trip form */}
         <div className="glass-search-container">
-          <form className="glass-search-form home-planner-form" onSubmit={createPreview}>
+          <form className="glass-search-form home-planner-form" onSubmit={createTrip}>
             <div className="search-field-group planner-destination">
               <span className="search-field-icon"><UiIcon icon={MapPinned} size={19} /></span>
               <div className="search-field-input">
@@ -749,7 +765,10 @@ function HomePanel({ api, run, firstName, go, setPreview, posts, setPosts, trips
                 <input 
                   type="date"
                   value={plan.startDate}
-                  onChange={(e) => setPlan({ ...plan, startDate: e.target.value })}
+                  onChange={(e) => {
+                    const startDate = e.target.value;
+                    setPlan({ ...plan, startDate, endDate: plan.endDate < startDate ? startDate : plan.endDate });
+                  }}
                   required
                 />
               </div>
@@ -815,7 +834,7 @@ function HomePanel({ api, run, firstName, go, setPreview, posts, setPosts, trips
             </div>
 
             <button className="glass-search-btn planner-submit" type="submit">
-              <UiIcon icon={Sparkles} size={19} />Tạo lịch trình gợi ý
+              <UiIcon icon={Plane} size={19} />Tạo chuyến đi
             </button>
           </form>
         </div>
@@ -886,7 +905,7 @@ function HomePanel({ api, run, firstName, go, setPreview, posts, setPosts, trips
                 <div className="empty-state-icon"><UiIcon icon={Plane} size={36} /></div>
                 <div className="empty-state-title">Chưa có chuyến đi</div>
                 <div className="empty-state-text">Tạo chuyến đi đầu tiên và trải nghiệm lập kế hoạch với AI</div>
-                <button className="primary" onClick={() => go('create')}>+ Tạo chuyến đi</button>
+                <button className="primary" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>+ Tạo chuyến đi</button>
               </div>
             </div>
           ) : (
@@ -993,7 +1012,7 @@ function PreviewPanel({ api, run, preview, setPreview }) {
   const [form, setForm] = useState({ destination: 'Đà Nẵng', startDate: today, endDate: tomorrow, people: 2, budget: 3000000, interests: 'Ăn uống, Biển, Văn hóa' });
   const submit = async (e) => {
     e.preventDefault();
-    const r = await run(() => api('/itinerary-preview', { method: 'POST', body: JSON.stringify({ ...form, interests: form.interests.split(',').map(s => s.trim()).filter(Boolean) }) }), 'Đã tạo preview.');
+    const r = await run(() => api('/itinerary-preview', { method: 'POST', body: JSON.stringify({ ...form, interests: form.interests.split(',').map(s => s.trim()).filter(Boolean) }) }), 'Đã tạo gợi ý lịch trình.');
     if (r?.data) setPreview(r.data);
   };
   return (
@@ -1025,7 +1044,7 @@ function PreviewPanel({ api, run, preview, setPreview }) {
               })}
             </div>
           </div>
-          <div className="full"><button className="primary" type="submit" style={{ width: '100%' }}>✨ Tạo preview lịch trình</button></div>
+          <div className="full"><button className="primary" type="submit" style={{ width: '100%' }}>Tạo gợi ý lịch trình</button></div>
         </form>
       </div>
       {preview && <div className="card card-pad animate-in"><PreviewResult preview={preview} /></div>}
@@ -2932,7 +2951,7 @@ function PostList({ posts = [], quickAction }) {
 function PreviewResult({ preview }) {
   return (
     <div>
-      <h3 className="icon-text" style={{ fontSize: 18, fontWeight: 800, marginBottom: 14 }}><UiIcon icon={Sparkles} />Kết quả preview</h3>
+      <h3 className="icon-text" style={{ fontSize: 18, fontWeight: 800, marginBottom: 14 }}><UiIcon icon={Sparkles} />Kết quả gợi ý</h3>
       <div className="stats-grid">
         <div className="stat-card"><div className="stat-label">Điểm đến</div><div className="stat-value" style={{ fontSize: 18 }}>{preview.destination}</div></div>
         <div className="stat-card"><div className="stat-label">Số người</div><div className="stat-value">{preview.people}</div></div>
