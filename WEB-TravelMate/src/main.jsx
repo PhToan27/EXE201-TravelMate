@@ -604,7 +604,7 @@ function ToolsPanel({ go, user }) {
           <p>Chọn nhanh chức năng bạn muốn dùng.</p>
         </div>
       </div>
-      <div className="content-grid-3">
+      <div className="tools-grid">
         {tools.map((tool) => (
           <button key={tool.tab} type="button" className="card card-pad tool-card" onClick={() => go(tool.tab)}>
             <div className="item-icon"><UiIcon icon={tool.icon} /></div>
@@ -623,6 +623,12 @@ function ToolsPanel({ go, user }) {
 function AuthPanel({ api, run, saveSession }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [loadExtraSlides, setLoadExtraSlides] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLoadExtraSlides(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -635,8 +641,12 @@ function AuthPanel({ api, run, saveSession }) {
     <div className="auth-page">
       <div className="auth-bg-slider" aria-hidden="true">
         <div className="auth-bg-slide auth-bg-dragon" />
-        <div className="auth-bg-slide auth-bg-bana" />
-        <div className="auth-bg-slide auth-bg-mykhe" />
+        {loadExtraSlides && (
+          <>
+            <div className="auth-bg-slide auth-bg-bana" />
+            <div className="auth-bg-slide auth-bg-mykhe" />
+          </>
+        )}
       </div>
 
       <div className="auth-slide-labels" aria-hidden="true">
