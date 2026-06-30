@@ -217,6 +217,37 @@ const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'https://exe201-travelmate-1.onrender.com/api';
 const LEGACY_API_BASE_URL = 'https://exe201-travelmate.onrender.com/api';
 const GA_MEASUREMENT_ID = 'G-1N8WWBVXEL';
+const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+
+let leafletLoadPromise = null;
+
+const loadLeaflet = () => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return Promise.resolve(null);
+  if (window.L) return Promise.resolve(window.L);
+  if (leafletLoadPromise) return leafletLoadPromise;
+
+  leafletLoadPromise = new Promise((resolve, reject) => {
+    if (!document.querySelector(`link[href="${LEAFLET_CSS_URL}"]`)) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = LEAFLET_CSS_URL;
+      link.crossOrigin = '';
+      document.head.appendChild(link);
+    }
+
+    const existingScript = document.querySelector(`script[src="${LEAFLET_JS_URL}"]`);
+    const script = existingScript || document.createElement('script');
+    script.src = LEAFLET_JS_URL;
+    script.crossOrigin = '';
+    script.async = true;
+    script.onload = () => resolve(window.L);
+    script.onerror = () => reject(new Error('Không thể tải thư viện bản đồ.'));
+    if (!existingScript) document.head.appendChild(script);
+  });
+
+  return leafletLoadPromise;
+};
 
 let lastTrackedPage =
   typeof window === 'undefined'
@@ -1079,6 +1110,7 @@ function TripDetail({ api, run, trip, setSelectedTrip, loadTripDetail, go }) {
   const detailStartMarkerRef = React.useRef(null);
   const detailEndMarkerRef = React.useRef(null);
   const detailRouteLineRef = React.useRef(null);
+  const [detailMapReady, setDetailMapReady] = useState(false);
 
   const days = groupByDay(trip.activities || []);
   const TABS = ['Lịch trình', 'Nơi ở', 'Ăn uống', 'Ngân sách', 'Packing', 'Thời tiết'];
@@ -1119,20 +1151,29 @@ function TripDetail({ api, run, trip, setSelectedTrip, loadTripDetail, go }) {
 
   // Leaflet map initialization
   useEffect(() => {
-    if (!window.L) return;
-    if (detailMapInstanceRef.current) return;
+    let cancelled = false;
 
-    const map = window.L.map('trip-detail-map').setView([16.0544, 108.2022], 13);
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const initMap = async () => {
+      const L = await loadLeaflet();
+      if (cancelled || !L || detailMapInstanceRef.current) return;
+
+      const map = L.map('trip-detail-map').setView([16.0544, 108.2022], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    detailMapInstanceRef.current = map;
+      detailMapInstanceRef.current = map;
+      setDetailMapReady(true);
+    };
+
+    initMap().catch((error) => console.warn('Leaflet load failed:', error.message));
 
     return () => {
+      cancelled = true;
       if (detailMapInstanceRef.current) {
         detailMapInstanceRef.current.remove();
         detailMapInstanceRef.current = null;
+        setDetailMapReady(false);
       }
     };
   }, []);
@@ -1218,7 +1259,7 @@ function TripDetail({ api, run, trip, setSelectedTrip, loadTripDetail, go }) {
       map.setView([lat, lng], 15);
       setMapRouteInfo(null);
     }
-  }, [mapTarget]);
+  }, [mapTarget, detailMapReady]);
 
   // Sync packing list text area input on load
   useEffect(() => {
@@ -1864,6 +1905,7 @@ function PlacesPanel({ api, run, places, setPlaces, loading }) {
   const startMarkerRef = React.useRef(null);
   const endMarkerRef = React.useRef(null);
   const routeLineRef = React.useRef(null);
+  const [placesMapReady, setPlacesMapReady] = useState(false);
 
   React.useEffect(() => {
     if (navigator.geolocation) {
@@ -1898,20 +1940,30 @@ function PlacesPanel({ api, run, places, setPlaces, loading }) {
   });
 
   React.useEffect(() => {
-    if (!selectedPlace || !window.L) return;
-    if (mapInstanceRef.current) return;
+    if (!selectedPlace) return;
+    let cancelled = false;
 
-    const map = window.L.map('places-map').setView([16.0678, 108.2208], 13);
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const initMap = async () => {
+      const L = await loadLeaflet();
+      if (cancelled || !L || mapInstanceRef.current) return;
+
+      const map = L.map('places-map').setView([16.0678, 108.2208], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    mapInstanceRef.current = map;
+      mapInstanceRef.current = map;
+      setPlacesMapReady(true);
+    };
+
+    initMap().catch((error) => console.warn('Leaflet load failed:', error.message));
 
     return () => {
+      cancelled = true;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        setPlacesMapReady(false);
       }
     };
   }, [selectedPlace]);
@@ -1960,7 +2012,7 @@ function PlacesPanel({ api, run, places, setPlaces, loading }) {
     } else if (bounds.length === 1) {
       map.setView(bounds[0], 14);
     }
-  }, [selectedPlace, rf.fromLat, rf.fromLng, rf.toLat, rf.toLng, routePoints]);
+  }, [selectedPlace, placesMapReady, rf.fromLat, rf.fromLng, rf.toLat, rf.toLng, routePoints]);
 
   const search = async (e) => {
     e.preventDefault();
