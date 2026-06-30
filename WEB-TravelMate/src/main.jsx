@@ -213,6 +213,25 @@ function Skeleton({ type = 'text', rows = 3, className = '' }) {
   );
 }
 
+function BlockingLoader({ task }) {
+  if (!task) return null;
+
+  return (
+    <div className="blocking-loader" role="status" aria-live="polite" aria-label={task.title || 'Đang xử lý'}>
+      <div className="blocking-loader-card">
+        <div className="travel-spinner">
+          <div className="travel-spinner-ring" />
+          <div className="travel-spinner-plane"><UiIcon icon={Plane} size={24} /></div>
+        </div>
+        <h3>{task.title || 'Đang xử lý'}</h3>
+        <p>{task.description || 'TravelMate đang chuẩn bị dữ liệu, vui lòng chờ trong giây lát.'}</p>
+        <div className="blocking-loader-progress"><span /></div>
+        <small>Đang lấy dữ liệu địa điểm và sắp xếp lịch trình phù hợp...</small>
+      </div>
+    </div>
+  );
+}
+
 const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'https://exe201-travelmate-1.onrender.com/api';
 const LEGACY_API_BASE_URL = 'https://exe201-travelmate.onrender.com/api';
@@ -389,6 +408,7 @@ function App() {
   const [routeRenderKey, setRouteRenderKey] = useState(() => `${window.location.pathname}${window.location.search}`);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [blockingTask, setBlockingTask] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -418,11 +438,20 @@ function App() {
     return data;
   }, [apiBaseUrl, token]);
 
-  const run = async (task, ok) => {
+  const run = async (task, ok, options = {}) => {
     setLoading(true); setMessage('');
+    if (options.blocking) {
+      setBlockingTask({
+        title: options.title,
+        description: options.description,
+      });
+    }
     try { const r = await task(); if (ok) setMessage(`✅ ${ok}`); return r; }
     catch (e) { setMessage(`❌ ${e.message || 'Có lỗi xảy ra.'}`); return null; }
-    finally { setLoading(false); }
+    finally {
+      setLoading(false);
+      if (options.blocking) setBlockingTask(null);
+    }
   };
 
   const saveSession = (p) => { setToken(p.token || ''); setUser(p); safeLocalStorage.setItem('travelmate.web.token', p.token || ''); safeLocalStorage.setItem('travelmate.web.user', JSON.stringify(p)); };
@@ -523,6 +552,16 @@ function App() {
   const tabSubtitles = { home: `Xin chào, ${firstName}!`, trips: `${trips.length} chuyến đi`, tools: 'Gợi ý lịch trình, quản lý chi phí và tra cứu tiện ích', create: 'Lên kế hoạch với AI', preview: 'Xem trước lịch trình AI', places: 'Tìm kiếm & dẫn đường', expenses: 'Quản lý ngân sách', journals: 'Ghi lại khoảnh khắc', community: 'Chia sẻ trải nghiệm', weather: 'Dự báo điểm đến', shared: 'Mở bằng mã chia sẻ', profile: 'Thông tin cá nhân', admin: 'Quản lý hệ thống', tripDetail: selectedTrip?.destination || '' };
 
   const go = (tab, options = {}) => navigateTo(tab, options);
+  const runTripCreation = (task, ok) => run(task, ok, {
+    blocking: true,
+    title: 'Đang tạo chuyến đi',
+    description: 'TravelMate đang chọn địa điểm, cân ngân sách và sắp xếp lịch trình phù hợp với bạn.',
+  });
+  const runItineraryPreview = (task, ok) => run(task, ok, {
+    blocking: true,
+    title: 'Đang tạo gợi ý lịch trình',
+    description: 'TravelMate đang lấy dữ liệu địa điểm và tạo lịch trình gợi ý tốt nhất.',
+  });
   const handleTripCreated = (trip) => {
     setSelectedTrip(trip);
     loadTrips();
@@ -532,6 +571,7 @@ function App() {
 
   return (
     <div className="app-layout">
+      <BlockingLoader task={blockingTask} />
       {/* Top Navbar */}
       <header className="main-navbar">
         <div className="navbar-container">
@@ -594,11 +634,11 @@ function App() {
           {message && <div className={`notice ${message.startsWith('✅') ? 'success' : 'error'}`}>{message}</div>}
 
           <ErrorBoundary>
-            {activeTab === 'home' && <HomePanel api={api} run={run} firstName={firstName} go={go} onCreated={handleTripCreated} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
+            {activeTab === 'home' && <HomePanel api={api} run={run} planningRun={runTripCreation} firstName={firstName} go={go} onCreated={handleTripCreated} posts={posts} setPosts={setPosts} trips={trips} loadTripDetail={loadTripDetail} />}
             {activeTab === 'trips' && <TripsPanel trips={trips} loadTrips={loadTrips} loadTripDetail={loadTripDetail} go={go} loading={loading} />}
             {activeTab === 'tools' && <ToolsPanel go={go} user={user} />}
-            {activeTab === 'create' && <CreateTripPanel api={api} run={run} onCreated={handleTripCreated} />}
-            {activeTab === 'preview' && <PreviewPanel api={api} run={run} preview={preview} setPreview={setPreview} />}
+            {activeTab === 'create' && <CreateTripPanel api={api} run={runTripCreation} onCreated={handleTripCreated} />}
+            {activeTab === 'preview' && <PreviewPanel api={api} run={runItineraryPreview} preview={preview} setPreview={setPreview} />}
             {activeTab === 'places' && <PlacesPanel api={api} run={run} places={places} setPlaces={setPlaces} loading={loading} />}
             {activeTab === 'expenses' && <ExpensesPanel api={api} run={run} trips={trips} expenses={expenses} setExpenses={setExpenses} loading={loading} />}
             {activeTab === 'journals' && <JournalsPanel api={api} run={run} trips={trips} journals={journals} setJournals={setJournals} user={user} go={go} loading={loading} />}
@@ -727,7 +767,7 @@ function AuthPanel({ api, run, saveSession }) {
 /* ═══════════════════════════════════════════════════════════
    HOME
    ═══════════════════════════════════════════════════════════ */
-function HomePanel({ api, run, firstName, go, onCreated, posts, setPosts, trips, loadTripDetail }) {
+function HomePanel({ api, run, planningRun = run, firstName, go, onCreated, posts, setPosts, trips, loadTripDetail }) {
   const [plan, setPlan] = useState({
     destination: 'Ngũ Hành Sơn', startDate: today, endDate: tomorrow, people: 2,
     budget: 3000000, interests: ['Ăn uống'],
@@ -737,7 +777,7 @@ function HomePanel({ api, run, firstName, go, onCreated, posts, setPosts, trips,
     e.preventDefault();
     const selectedInterests = plan.interests.join(', ');
     const people = Math.max(Number(plan.people) || 1, 1);
-    const r = await run(() => api('/trips', {
+    const r = await planningRun(() => api('/trips', {
       method: 'POST',
       body: JSON.stringify({
         destination: plan.destination.trim(),
